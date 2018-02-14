@@ -126,7 +126,8 @@ public class WhereSQLBuilder extends IgniteFilterBuilder {
             }
             return sb.toString();
         } catch (UnsupportedFilterException ex) {
-            throw ex;
+            // Do not throw exception, impose no constraints instead
+            return null;
         }
     }
 
