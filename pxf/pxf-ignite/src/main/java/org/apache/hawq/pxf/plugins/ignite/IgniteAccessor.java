@@ -27,6 +27,7 @@ import org.apache.hawq.pxf.api.utilities.ColumnDescriptor;
 import org.apache.hawq.pxf.api.utilities.InputData;
 import org.apache.hawq.pxf.plugins.ignite.IgnitePlugin;
 
+
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedList;

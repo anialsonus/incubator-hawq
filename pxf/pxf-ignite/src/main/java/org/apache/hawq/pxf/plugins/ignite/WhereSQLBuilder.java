@@ -117,7 +117,7 @@ public class WhereSQLBuilder extends IgniteFilterBuilder {
                         sb.append("'").append(val.toString()).append("'");
                         break;
                     case DATE:
-                        sb.append("date'" + val.toString() + "'");
+                        sb.append("'" + val.toString() + "'");
                         break;
                     default:
                         throw new UnsupportedFilterException("unsupported column type for filtering : " + column.columnTypeCode());
