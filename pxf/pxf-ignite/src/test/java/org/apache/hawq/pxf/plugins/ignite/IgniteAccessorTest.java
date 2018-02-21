@@ -23,18 +23,31 @@ import org.junit.Test;
 import org.junit.Before;
 import org.junit.runner.RunWith;
 import static org.junit.Assert.*;
+import static org.junit.Assume.assumeTrue;
 
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
+
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
-import java.util.Map;
-import java.util.TreeMap;
+import java.util.List;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import org.powermock.api.mockito.PowerMockito;
+import org.powermock.api.mockito.expectation.WithExpectedArguments;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
+
+import static org.mockito.Matchers.anyString;
+import static org.powermock.api.mockito.PowerMockito.when;
+import static org.powermock.api.support.membermodification.MemberMatcher.method;
+
 import org.mockito.internal.util.reflection.Whitebox;
+import org.mockito.internal.verification.AtLeast;
 import org.apache.hawq.pxf.api.io.DataType;
 import org.apache.hawq.pxf.api.utilities.ColumnDescriptor;
 import org.apache.hawq.pxf.api.utilities.InputData;
@@ -43,30 +56,55 @@ import org.apache.hawq.pxf.api.utilities.InputData;
 @RunWith(PowerMockRunner.class)
 @PrepareForTest({IgniteAccessor.class})
 public class IgniteAccessorTest {
-    IgniteAccessor readAccessor = null;
-    IgniteAccessor writeAccessor = null;
-
     @Before
-    public void prepareTestAccessors() throws Exception {
-        InputData inputData = mock(InputData.class);
-        ArrayList<ColumnDescriptor> columns = new ArrayList<>();
+    public void prepareAccessorTest() throws Exception {
+        inputData = mock(InputData.class);
+
+        org.mockito.Mockito.when(inputData.getDataSource()).thenReturn("TableTest");
+
         columns.add(new ColumnDescriptor("id", DataType.INTEGER.getOID(), 0, "int4", null));
-        columns.add(new ColumnDescriptor("cdate", DataType.DATE.getOID(), 1, "date", null));
-        columns.add(new ColumnDescriptor("amt", DataType.FLOAT8.getOID(), 2, "float8", null));
-        columns.add(new ColumnDescriptor("grade", DataType.TEXT.getOID(), 3, "text", null));
-        when(inputData.getTupleDescription()).thenReturn(columns);
-        when(inputData.getColumn(0)).thenReturn(columns.get(0));
-        when(inputData.getColumn(1)).thenReturn(columns.get(1));
-        when(inputData.getColumn(2)).thenReturn(columns.get(2));
-        when(inputData.getColumn(3)).thenReturn(columns.get(3));
-        Whitebox.setInternalState(inputData, "columns", columns);
+        columns.add(new ColumnDescriptor("name", DataType.TEXT.getOID(), 1, "text", null));
+        columns.add(new ColumnDescriptor("birthday", DataType.DATE.getOID(), 2, "date", null));
+        columns.add(new ColumnDescriptor("key", DataType.BYTEA.getOID(), 3, "bytea", null));
+        org.mockito.Mockito.when(inputData.getTupleDescription()).thenReturn(columns);
+        org.mockito.Mockito.when(inputData.getColumn(0)).thenReturn(columns.get(0));
+        org.mockito.Mockito.when(inputData.getColumn(1)).thenReturn(columns.get(1));
+        org.mockito.Mockito.when(inputData.getColumn(2)).thenReturn(columns.get(2));
+        org.mockito.Mockito.when(inputData.getColumn(3)).thenReturn(columns.get(3));
 
-        readAccessor = PowerMockito.spy(new IgniteAccessor(inputData));
-
+        JsonArray tempArray = new JsonArray();
+        JsonArray tempArray2 = new JsonArray();
+        tempArray2.add(1);
+        tempArray2.add("abcd");
+        tempArray2.add("'2001-01-01'");
+        tempArray2.add("YWJjZA==");
+        tempArray.add(tempArray2);
+        correctAnswer.add("items", tempArray);
+        correctAnswer.addProperty("last", false);
+        correctAnswer.addProperty("queryId", 1);
     }
 
-    @Test(expected = Exception.class)
-    public void testReadAccess() throws Exception {
+    @Test
+    public void testReadAccess1() throws Exception {
+        IgniteAccessor acc = PowerMockito.spy(new IgniteAccessor(inputData));
 
+        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        PowerMockito.doReturn(correctAnswer).when(acc, "sendRestRequest", anyString());
+
+        acc.openForRead();
+        acc.readNextObject();
+        acc.closeForRead();
+
+        PowerMockito.verifyPrivate(acc, Mockito.times(3)).invoke(method(IgniteAccessor.class, "sendRestRequest", String.class)).withArguments(captor.capture());
+
+        List<String> allParams = captor.getAllValues();
+
+        assertEquals(allParams.get(0), "http://127.0.0.1:8080/ignite?cmd=qryfldexe&pageSize=0&qry=SELECT+id%2Cname%2Cbirthday%2Ckey+FROM+TableTest");
+        assertEquals(allParams.get(1), "http://127.0.0.1:8080/ignite?cmd=qryfetch&pageSize=128&qryId=1");
+        assertEquals(allParams.get(2), "http://127.0.0.1:8080/ignite?cmd=qrycls&qryId=1");
     }
+
+    private ArrayList<ColumnDescriptor> columns = new ArrayList<>();
+    private InputData inputData = null;
+    private JsonObject correctAnswer = new JsonObject();
 }
