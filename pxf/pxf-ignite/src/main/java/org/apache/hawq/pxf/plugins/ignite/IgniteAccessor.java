@@ -27,7 +27,6 @@ import org.apache.hawq.pxf.api.utilities.ColumnDescriptor;
 import org.apache.hawq.pxf.api.utilities.InputData;
 import org.apache.hawq.pxf.plugins.ignite.IgnitePlugin;
 
-
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -35,11 +34,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.io.InputStreamReader;
 import java.io.BufferedReader;
-import java.net.URL;
-import java.net.URLEncoder;
-
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
+import java.net.URL;
+import java.net.URLEncoder;
 import java.net.MalformedURLException;
 import java.net.ProtocolException;
 
@@ -271,6 +269,7 @@ public class IgniteAccessor extends IgnitePlugin implements ReadAccessor, WriteA
             }
             LOG.info("Ignite write request. Query: '" + queryWrite + "'");
             sendInsertRestRequest(queryWrite);
+            bufferWrite.removeFirst();
             isWriteActive = true;
             return true;
         }
