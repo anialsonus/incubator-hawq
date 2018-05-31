@@ -243,6 +243,11 @@ project('pxf-service') {
             into "/etc/pxf-${project.version}/conf"
         }
 
+        from('src/main/resources/pxf-profiles-default.xml') {
+            fileType CONFIG | NOREPLACE
+            into "/etc/pxf-${project.version}/conf"
+        }
+
         from('src/configs/pxf-site.xml') {
             fileType CONFIG | NOREPLACE
             into "/etc/pxf-${project.version}/conf"
