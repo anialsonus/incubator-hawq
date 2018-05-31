@@ -315,7 +315,6 @@ project('pxf-service') {
         }
 
         link("/usr/lib/pxf-${project.version}/${project.name}.jar", "${project.name}-${project.version}.jar")
-        link("/usr/lib/pxf-${project.version}/pxf-api.jar", "pxf-api-${project.version}.jar")
 
     }
 
