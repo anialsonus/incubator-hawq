@@ -293,10 +293,6 @@ project('pxf-service') {
         from(jar.outputs.files) {
             into "/usr/lib/pxf-${project.version}"
         }
-
-        from(project(':pxf-api').jar.outputs.files){
-            into "/usr/lib/pxf-${project.version}"
-        }
         
         //tomcat configuration files
         from('src/configs/tomcat') {
