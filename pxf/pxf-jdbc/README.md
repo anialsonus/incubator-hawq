@@ -70,13 +70,13 @@ The **`<jdbc_login_parameters>`** are **optional**, but if provided, both of the
 
 The **`<plugin_parameters>`** are **optional**.
 
-The meaning of `BATCH_SIZE` is given in section [batching of INSERT queries](#Batching).
+The meaning of `BATCH_SIZE` is given in section [batching of INSERT queries](#batching).
 
-The meaning of `POOL_SIZE` is given in section [using thread pool for INSERT queries](#Thread_pool).
+The meaning of `POOL_SIZE` is given in section [using thread pool for INSERT queries](#thread-pool).
 
-The meaning of `PARTITION_BY`, `RANGE` and `INTERVAL` is given in section [partitioning](#Partitioning).
+The meaning of `PARTITION_BY`, `RANGE` and `INTERVAL` is given in section [partitioning](#partitioning).
 
-The meaning of `PRE_SQL` and `STOP_IF_PRE_FAILS` is given in section [Query precode](#Query_precode).
+The meaning of `PRE_SQL` and `STOP_IF_PRE_FAILS` is given in section [Query precode](#query-precode).
 
 ```
 [
