@@ -80,6 +80,7 @@ public class JdbcAccessor extends JdbcPlugin implements ReadAccessor, WriteAcces
         }
 
         Connection connection = super.getConnection();
+        executePreQuerySql(connection, preQuerySql, stopIfPreQueryFails);
 
         queryRead = buildSelectQuery(connection.getMetaData());
         statementRead = connection.createStatement();
@@ -127,6 +128,7 @@ public class JdbcAccessor extends JdbcPlugin implements ReadAccessor, WriteAcces
         }
 
         Connection connection = super.getConnection();
+        executePreQuerySql(connection, preQuerySql, stopIfPreQueryFails);
 
         queryWrite = buildInsertQuery();
         statementWrite = super.getPreparedStatement(connection, queryWrite);
@@ -416,6 +418,41 @@ public class JdbcAccessor extends JdbcPlugin implements ReadAccessor, WriteAcces
             LOG.error("An exception happened during the transaction rollback: '" + e.toString() + "'");
         }
         return rollbackException;
+    }
+
+    /**
+     * Execute a given SQL query in a dedicated {@link Statement} and process its exceptions
+     *
+     * @param connection A JDBC connection to use
+     * @param query Query to execute. If null, do nothing and do not check other parameters
+     * @param allowThrow allow this procedure to throw {@link SQLException}
+     *
+     * @throws SQLException if an exception happens when setting autocommit mode or executing the query AND 'allowThrow' is 'true'
+     * @throws IllegalArgumentException if the provided connection is null or closed
+     */
+    private void executePreQuerySql(Connection connection, String query, boolean allowThrow) throws SQLException, IllegalArgumentException {
+        if (query == null) {
+            return;
+        }
+        if ((connection == null) || (connection.isClosed())) {
+            throw new IllegalArgumentException("The provided connection is null or closed");
+        }
+        try {
+            boolean autoCommit = connection.getAutoCommit();
+            connection.setAutoCommit(true);
+            Statement statement = connection.createStatement();
+            statement.execute(query);
+            statement.close();
+            connection.setAutoCommit(autoCommit);
+        }
+        catch (SQLException e) {
+            if (allowThrow) {
+                throw e;
+            }
+            else {
+                LOG.warn("An exception '" + e.toString() + "' happened when running SQL pre-query '" + query + "'");
+            }
+        }
     }
 
     // Read variables
