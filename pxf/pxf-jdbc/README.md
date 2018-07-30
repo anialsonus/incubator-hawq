@@ -72,9 +72,12 @@ The **`<plugin_parameters>`** are **optional**.
 
 The meaning of `BATCH_SIZE` is given in section [batching of INSERT queries](#Batching).
 
-The meaning of `POOL_SIZE` is given in section [using thread pool for INSERT queries](#Thread_pool)
+The meaning of `POOL_SIZE` is given in section [using thread pool for INSERT queries](#Thread_pool).
 
-The meaning of other parameters is given in section [partitioning](#Partitioning).
+The meaning of `PARTITION_BY`, `RANGE` and `INTERVAL` is given in section [partitioning](#Partitioning).
+
+The meaning of `PRE_SQL` and `STOP_IF_PRE_FAILS` is given in section [Query precode](#Query_precode).
+
 ```
 [
 &BATCH_SIZE=<batch_size>
@@ -86,6 +89,9 @@ The meaning of other parameters is given in section [partitioning](#Partitioning
 &PARTITION_BY=<column>:<column_type>
 &RANGE=<start_value>:<end_value>
 [&INTERVAL=<value>[:<unit>]]
+]
+[
+&PRE_SQL=<string>[&STOP_IF_PRE_FAILS=<string>]
 ]
 ```
 
@@ -136,6 +142,15 @@ To enable thread pool, create an external table with the paramete `POOL_SIZE` se
 * `integer = 1`. Thread pool will be disabled
 
 By default (`POOL_SIZE` is absent), thread pool is not used.
+
+
+## Query precode
+
+Before executing any query, the PXF JDBC plugin can execute an extra SQL query (or a set of such queries).
+
+Pass the SQL query as an ordinary string (including `;` if necessary) as a parameter `PRE_SQL`.
+
+To prevent the plugin from executing the "main" `INSERT` or `SELECT` query, set a parameter `STOP_IF_PRE_FAILS` to any value. If this parameter is not present, the PXF JDBC plugin will continue execution of the "main" query even if precode fails, and a warning will be added to PXF logs.
 
 
 ## Partitioning

@@ -111,6 +111,14 @@ public class JdbcPlugin extends Plugin {
                 throw new UserDataException("POOL_SIZE is incorrect: must be an integer");
             }
         }
+
+        // This parameter is not required. The default value is null
+        preQuerySql = input.getUserProperty("PRE_SQL");
+        if (preQuerySql != null) {
+            if (input.getUserProperty("STOP_IF_PRE_FAILS") != null) {
+                stopIfPreQueryFails = true;
+            }
+        }
     }
 
     /**
@@ -201,6 +209,10 @@ public class JdbcPlugin extends Plugin {
     protected String user = null;
     protected String pass = null;
     protected String tableName = null;
+
+    // User-defined parameters for all queries
+    protected String preQuerySql = null;
+    protected boolean stopIfPreQueryFails = false;
 
     // User-defined parameters for INSERT queries
     protected int batchSize = 0;
