@@ -19,8 +19,6 @@ package org.apache.hawq.pxf.plugins.ignite;
  * under the License.
  */
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hawq.pxf.api.UserDataException;
 import org.apache.hawq.pxf.api.utilities.InputData;
 import org.apache.hawq.pxf.api.utilities.Plugin;
@@ -31,59 +29,78 @@ import org.apache.hawq.pxf.api.utilities.Plugin;
  * Implemented subclasses: {@link IgniteAccessor}, {@link IgniteResolver}.
  */
 public class IgnitePlugin extends Plugin {
-    // Ignite cache
-    protected static final String igniteHostDefault = "127.0.0.1:8080";
-    protected String igniteHost = null;
-    // PXF buffer for Ignite data. '0' is allowed for INSERT queries
-    protected static final int bufferSizeDefault = 128;
-    protected int bufferSize = bufferSizeDefault;
-    // Ignite cache name
-    protected String cacheName = null;
-
     /**
      * Class constructor. Parses and checks 'InputData'
      * @param inputData
      * @throws UserDataException if the request parameter is malformed
      */
-    public IgnitePlugin(InputData inputData) throws UserDataException {
+    public IgnitePlugin(InputData inputData) throws UserDataException, NumberFormatException {
         super(inputData);
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("Constructor started");
+
+        String hostParameter = inputData.getUserProperty("HOST");
+        String hostsParameter = inputData.getUserProperty("HOSTS");
+        if (hostsParameter != null) {
+            hosts = hostsParameter;
+        }
+        else if (hostParameter != null) {
+            hosts = hostParameter;
+        }
+        else {
+            throw new UserDataException("HOST or HOSTS parameter must be provided");
         }
 
-        igniteHost = inputData.getUserProperty("IGNITE_HOST");
-        if (igniteHost == null) {
-            igniteHost = igniteHostDefault;
+        // This is not a required parameter, and null is a valid default value
+        igniteCache = inputData.getUserProperty("IGNITE_CACHE");
+
+        // This is not a required parameter, and null is a valid default value
+        user = inputData.getUserProperty("USER");
+        if (user != null) {
+            // This is not a required parameter, and null is a valid default value
+            password = inputData.getUserProperty("PASSWORD");
         }
 
-        cacheName = inputData.getUserProperty("IGNITE_CACHE");
-        // If this value is null, Ignite will use the default cache
-
-        String bufferSize_str = inputData.getUserProperty("BUFFER_SIZE");
-        if (bufferSize_str != null) {
-            try {
-                bufferSize = Integer.parseInt(bufferSize_str);
-                // Zero value is allowed for INSERT queries
-                if (bufferSize < 0) {
-                    bufferSize = bufferSizeDefault;
-                    LOG.warn("Buffer size is incorrect; set to the default value (" + bufferSizeDefault + ")");
-                }
+        // This is not a required parameter
+        String bufferSizeParameter = inputData.getUserProperty("BUFFER_SIZE");
+        if (bufferSizeParameter != null) {
+            bufferSize = Integer.parseInt(bufferSizeParameter);
+            if (bufferSize <= 0) {
+                throw new NumberFormatException("BUFFER_SIZE must be a positive integer");
             }
-            catch (NumberFormatException e) {
-                bufferSize = bufferSizeDefault;
-                LOG.warn("Buffer size is incorrect; set to the default value (" + bufferSizeDefault + ")");
-            }
         }
-        // else: bufferSize is already set to bufferSizeDefault
 
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("Constructor successful");
+        String lazyParameter = inputData.getUserProperty("LAZY");
+        if (lazyParameter != null) {
+            lazy = true;
+        }
+
+        String tcpNoDelayParameter = inputData.getUserProperty("I_TCP_NO_DELAY");
+        if (tcpNoDelayParameter != null) {
+            tcpNoDelay = true;
+        }
+
+        String replicatedOnlyParameter = inputData.getUserProperty("I_REPLICATED_ONLY");
+        if (replicatedOnlyParameter != null) {
+            replicatedOnly = true;
         }
     }
 
+    @Override
     public boolean isThreadSafe() {
         return true;
     }
 
-    private static final Log LOG = LogFactory.getLog(IgnitePlugin.class);
+    // Connection parameters
+    protected String hosts = null;
+    protected String igniteCache = null;
+    protected String user = null;
+    protected String password = null;
+
+    // ReceiveBufferSize or SendBufferSize (depends on type of query)
+    protected int bufferSize = 0;
+
+    // Lazy SELECTs
+    protected boolean lazy = false;
+
+    protected boolean tcpNoDelay = false;
+    protected boolean replicatedOnly = false;
 }

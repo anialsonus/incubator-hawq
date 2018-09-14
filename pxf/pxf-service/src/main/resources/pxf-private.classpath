@@ -65,6 +65,7 @@ hadoop/share/hadoop/common/lib/log4j-*[0-9].jar
 hadoop/share/hadoop/common/lib/protobuf-java-*[0-9].jar
 hadoop/share/hadoop/common/lib/slf4j-api-*[0-9].jar
 hadoop/share/hadoop/common/lib/gson-*[0-9].jar
+hadoop/share/hadoop/common/lib/ignite-core-*[0-9].jar
 
 # Hive Libraries
 hive/lib/antlr-runtime*.jar

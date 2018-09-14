@@ -1,6 +1,6 @@
 # Accessing Ignite database using PXF
 
-The PXF Ignite plug-in enables to access the [Apache Ignite database](https://ignite.apache.org/) (both read and write operations are supported) via REST API.
+The PXF Ignite plug-in enables to access the [Apache Ignite database](https://ignite.apache.org/) (both read and write operations are supported) via Ignite thin connector for Java.
 
 
 ## Prerequisites
@@ -9,7 +9,7 @@ Check the following before using the plug-in:
 
 * The Ignite plug-in is installed on all PXF nodes;
 
-* The Apache Ignite client is installed and running at the `IGNITE_HOST` (`localhost` by default; this can be changed, see syntax below), and it accepts http queries from the PXF (note that *enabling Ignite REST API does not require changes in Ignite configuration*; see the instruction on how to do that at https://apacheignite.readme.io/docs/rest-api#section-getting-started).
+* The Apache Ignite client is installed and running.
 
 
 ## Syntax
@@ -22,9 +22,15 @@ LOCATION ('pxf://<ignite_table_name>?PROFILE=Ignite[&<extra-parameter>&<extra-pa
 FORMAT 'CUSTOM' (formatter='pxfwritable_import');
 ```
 where each `<extra-parameter>` is one of the following:
-* `IGNITE_HOST=<ignite_host_address_with_port>`. The location of Ignite client node. If not given, `127.0.0.1:8080` is used by default;
-* `IGNITE_CACHE=<ignite_cache_name>`. The name of Ignite cache to use. If not given, this parameter is not included in queries from PXF to Ignite, thus Ignite default values will be used (at the moment, this is `Default` cache). This option is **case-sensitive**;
-* `BUFFER_SIZE=<unsigned_int>`. The number of tuples send to (from) Ignite per a response. The same number of tuples is stored in in-plug-in cache. The values `0` and `1` are equal (cache is not used, each tuple is passed in its own query to Ignite). If not given, `128` is used by default;
+* `HOST=<ignite_host_address_with_port>`. The location of Ignite client node;
+* `HOSTS=<ignite_host_addresses_with_ports_divided_by_', '>`. The location of multiple Ignite client nodes; the one to be used will be chosen randomly during query execution;
+* `IGNITE_CACHE=<ignite_cache_name>`. The name of Ignite cache to use. If not given, this parameter is not included in queries from PXF to Ignite, thus Ignite default values will be used (at the moment, this is `Default` cache);
+* `BUFFER_SIZE=<unsigned_int>`. The number of tuples send to (from) Ignite per a response. The same number of tuples is stored in in-plug-in cache;
+* `USER=<string>`. Ignite user name;
+* `PASSWORD=<string>`. Ignite user password;
+* `LAZY=<any_value>`. If this parameter is present, perform lazy SELECTs (the Ignite will not store data on the node the PXF is connected to; instead, it will send it in portions to PXF over time). This may increase query execution time;
+* `I_TCP_NO_DELAY=<any_value>`. If this parameter is present, make Ignite always send TCP packets immediately when they are emitted. If this parameter is NOT present, such packets are collected and bigger packets are formed of smaller ones.
+* `I_REPLICATED_ONLY=<any_value>`. If this parameter is present, it signalizes to Ignite that the query contains only replicated tables. This is a hint for potentially more effective execution.
 * `PARTITION_BY=<column>:<column_type>`. See below;
 * `RANGE=<start_value>:<end_value>`. See below;
 * `INTERVAL=<value>[:<unit>]`. See below.

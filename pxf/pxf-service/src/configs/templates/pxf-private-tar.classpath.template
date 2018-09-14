@@ -62,6 +62,7 @@ HADOOP_ROOT/hadoop/share/hadoop/hdfs/hadoop-hdfs-*[0-9].jar
 HADOOP_ROOT/hadoop/share/hadoop/mapreduce/hadoop-mapreduce-client-core-*[0-9].jar
 HADOOP_ROOT/hadoop/share/hadoop/mapreduce/hadoop-mapreduce-client-common-*[0-9].jar
 HADOOP_ROOT/hadoop/share/hadoop/common/lib/gson-*[0-9].jar
+HADOOP_ROOT/hadoop/share/hadoop/common/lib/ignite-core-*[0-9].jar
 
 # Pick Jackson 1.9 jars from hdfs dir for HDP tar and from mapreduce1 for CDH tar
 HADOOP_ROOT/hadoop/share/hadoop/[hdfs|madreduce1]/lib/jackson-core-asl-1.9*[0-9].jar

@@ -45,7 +45,7 @@ buildscript {
         classpath "com.netflix.nebula:gradle-ospackage-plugin:2.2.6"
         classpath "de.undercouch:gradle-download-task:2.1.0"
         classpath 'com.netflix.nebula:gradle-aggregate-javadocs-plugin:2.2.+'
-    }   
+    }
 }
 
 // Hadoop distribution (can be hdp or null which would default to apache) - needed to set correct classpaths
@@ -256,7 +256,7 @@ project('pxf-service') {
 
         from("src/main/resources/pxf-private${hddist}.classpath") {
             into("/etc/pxf-${project.version}/conf")
-            rename("pxf-private${hddist}.classpath", "pxf-private.classpath") 
+            rename("pxf-private${hddist}.classpath", "pxf-private.classpath")
         }
 
         from('src/main/resources/pxf-public.classpath') {
@@ -275,7 +275,7 @@ project('pxf-service') {
                              'pxfDefaultUserImpersonation': (databaseProperties.pxfDefaultUserImpersonation == null ? "" : databaseProperties.pxfDefaultUserImpersonation)])
             into "/etc/pxf-${project.version}/conf"
         }
-        
+
         from('src/main/resources/pxf-log4j.properties') {
             fileType CONFIG | NOREPLACE
             into "/etc/pxf-${project.version}/conf"
@@ -288,7 +288,7 @@ project('pxf-service') {
         from(jar.outputs.files) {
             into "/usr/lib/pxf-${project.version}"
         }
-        
+
         //tomcat configuration files
         from('src/configs/tomcat') {
             fileType CONFIG | NOREPLACE
@@ -449,7 +449,7 @@ project('pxf-json') {
     task create_tweets_tgz(type: Exec){
       commandLine 'tar', '-zcf', 'src/test/resources/tweets.tar.gz', '-C', 'src/test/resources', 'tweets-pp.json'
     }
-    
+
     tasks['test'].dependsOn('create_tweets_tgz')
 }
 
@@ -514,9 +514,9 @@ project('pxf-ignite') {
     dependencies {
         compile(project(':pxf-api'))
         compile(project(':pxf-service'))
-        compile 'com.google.code.gson:gson:2.8.2'
         compile 'org.apache.commons:commons-compress:1.16.1'
-        testCompile 'com.google.code.gson:gson:2.8.2'
+        compile 'javax.cache:cache-api:1.0.0'
+        compile 'org.apache.ignite:ignite-core:2.6.0'
         testCompile 'org.apache.commons:commons-compress:1.16.1'
     }
 
@@ -581,7 +581,7 @@ task rpm(type: Copy, dependsOn: [subprojects.build, distSubprojects.buildRpm]) {
     }
 }
 
-// tomcat 
+// tomcat
 def tomcatName = "apache-tomcat-${tomcatVersion}"
 def tomcatTargetDir = "tomcat/build"
 

@@ -51,6 +51,7 @@
 /usr/lib/hadoop/client/slf4j-api-*[0-9].jar
 /usr/lib/hadoop/client/snappy-java-*[0-9].jar
 /usr/lib/hadoop/client/gson-*[0-9].jar
+/usr/lib/hadoop/client/ignite-core-*[0-9].jar
 /usr/lib/hive/lib/antlr-runtime-*[0-9].jar
 /usr/lib/hive/lib/datanucleus-api-jdo-*[0-9].jar
 /usr/lib/hive/lib/datanucleus-core-*[0-9].jar
