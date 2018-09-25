@@ -23,9 +23,15 @@
 #include "postgres.h"
 #include "fmgr.h"
 #include "executor/executor.h"
+#include "vtype.h"
+#include "vtype_ext.h"
+#include "vagg.h"
 
 /* Function declarations for extension loading and unloading */
 extern void _PG_init(void);
 extern void _PG_fini(void);
+
+extern bool HasVecExecOprator(Plan *plan);
+extern void BackportTupleDescriptor(PlanState* ps,TupleDesc td);
 
 #endif

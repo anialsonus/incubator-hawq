@@ -45,7 +45,7 @@
 #include "utils/relcache.h"
 #include "gpmon/gpmon.h"                /* gpmon_packet_t */
 #include "utils/memaccounting.h"
-
+#include "utils/bloomfilter.h"
 
 /*
  * Currently, since grouping is defined as uint64 internally, it limits the
@@ -1293,6 +1293,9 @@ typedef struct PlanState
          */
         int gpmon_plan_tick;
         gpmon_packet_t gpmon_pkt;
+
+        /* state of executor operator  */
+        void* vectorized;
 } PlanState;
 
 typedef struct Gpmon_NameUnit_MaxVal
@@ -1492,6 +1495,24 @@ typedef enum
 	TableTypeInvalid,
 } TableType;
 
+/*
+ * Runtime filter information passed down to scan.
+ * 	hasRuntimeFilter: if this runtime filter has a created Bloom filter
+ * 	stopRuntimeFilter: if stop using runtime filter
+ * 	joinkeys: column position of join keys
+ *	hashfunctions: hash functions to hash join key
+ *	bloomfilter: BloomFilter instance
+ */
+typedef struct RuntimeFilterState
+{
+	bool hasRuntimeFilter;
+	bool stopRuntimeFilter;
+	bool checkedSamples;
+	List* joinkeys;
+	FmgrInfo *hashfunctions;
+	BloomFilter bloomfilter;
+} RuntimeFilterState;
+
 /* ----------------
  *         ScanState information
  *
@@ -1518,6 +1539,9 @@ typedef struct ScanState
 
 	/* The type of the table that is being scanned */
 	TableType tableType;
+
+	/* Runtime filter */
+	struct RuntimeFilterState *runtimeFilter;
 
 } ScanState;
 
@@ -2114,6 +2138,8 @@ typedef struct HashJoinState
         bool workfiles_created;
         /* number of batches when we loaded from the state. -1 means not loaded yet */
         int nbatch_loaded_state;
+        bool useRuntimeFilter;
+        int  estimatedInnerNum;
 
 } HashJoinState;
 

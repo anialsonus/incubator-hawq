@@ -376,6 +376,7 @@ _outPlanInfo(StringInfo str, Plan *node)
 	{
 		WRITE_UINT64_FIELD(operatorMemKB);
 	}
+	WRITE_BOOL_FIELD(vectorized);
 }
 
 /*
@@ -776,6 +777,8 @@ _outHashJoin(StringInfo str, HashJoin *node)
 
 	WRITE_LIST_FIELD(hashclauses);
 	WRITE_LIST_FIELD(hashqualclauses);
+	WRITE_BOOL_FIELD(useRuntimeFilter);
+	WRITE_INT_FIELD(estimatedInnerNum);
 }
 
 static void

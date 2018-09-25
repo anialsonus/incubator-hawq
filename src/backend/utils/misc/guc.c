@@ -738,6 +738,8 @@ double	  optimizer_cost_threshold;
 double  optimizer_nestloop_factor;
 double  locality_upper_bound;
 double  net_disk_ratio;
+double hawq_hashjoin_bloomfilter_ratio;
+int hawq_hashjoin_bloomfilter_sampling_number;
 bool		optimizer_cte_inlining;
 int		optimizer_cte_inlining_bound;
 double 	optimizer_damping_factor_filter;
@@ -4419,6 +4421,15 @@ static struct config_bool ConfigureNamesBool[] =
 		false, NULL, NULL
 	},
 
+	{
+		{"hawq_hashjoin_bloomfilter", PGC_USERSET, GP_ARRAY_TUNING,
+			gettext_noop("Use bloomfilter in hash join"),
+			gettext_noop("Use bloomfilter may speed up hash join performance"),
+			GUC_NOT_IN_SAMPLE | GUC_NO_SHOW_ALL | GUC_GPDB_ADDOPT
+		},
+		&hawq_hashjoin_bloomfilter,
+		false, NULL, NULL
+	},
 
 	/* End-of-list marker */
 	{
@@ -5834,16 +5845,6 @@ static struct config_int ConfigureNamesInt[] =
 	},
 
 	{
-		{"gp_hashjoin_bloomfilter", PGC_USERSET, GP_ARRAY_TUNING,
-		 gettext_noop("Use bloomfilter in hash join"),
-		 gettext_noop("Use bloomfilter may speed up hashtable probing"),
-		 GUC_NOT_IN_SAMPLE | GUC_NO_SHOW_ALL | GUC_GPDB_ADDOPT
-		},
-		&gp_hashjoin_bloomfilter,
-		1, 0, 1, NULL, NULL
-	},
-
-	{
 		{"gp_motion_slice_noop", PGC_USERSET, GP_ARRAY_TUNING,
 		 gettext_noop("Make motion nodes in certain slices noop"),
 		 gettext_noop("Make motion nodes noop, to help analyze performace"),
@@ -6696,6 +6697,15 @@ static struct config_int ConfigureNamesInt[] =
 		300000, 1, INT_MAX, NULL, NULL
 	},
 
+	{
+		{"hawq_hashjoin_bloomfilter_sampling_number", PGC_USERSET, PRESET_OPTIONS,
+			gettext_noop("Sets the sampling number for hash join bloomfilter when scan the outer table."),
+			NULL,
+			GUC_NO_SHOW_ALL
+		},
+		&hawq_hashjoin_bloomfilter_sampling_number,
+		10000, 100, INT_MAX, NULL, NULL
+	},
 
 	/* End-of-list marker */
 	{
@@ -7122,6 +7132,16 @@ static struct config_real ConfigureNamesReal[] =
 		},
 		&hawq_re_memory_quota_allocation_ratio,
 		0.5, 0.0, 1.0, NULL, NULL
+	},
+
+	{
+		{"hawq_hashjoin_bloomfilter_ratio", PGC_USERSET, GP_ARRAY_TUNING,
+			gettext_noop("Sets the ratio for hash join Bloom filter."),
+			NULL,
+			GUC_NO_SHOW_ALL
+		},
+		&hawq_hashjoin_bloomfilter_ratio,
+		0.4, 0.0, 1.0, NULL, NULL
 	},
 
 /* End-of-list marker */
@@ -8252,14 +8272,14 @@ static struct config_string ConfigureNamesString[] =
 		"64GB", NULL, NULL
 	},
 
-    {
+	{
 		{"hawq_global_rm_type", PGC_POSTMASTER, RESOURCES_MGM,
 				gettext_noop("set resource management server type"),
 				NULL
 		},
 		&rm_global_rm_type,
 		"none", NULL, NULL
-    },
+	},
 
 	{
 		{"hawq_rm_yarn_address", PGC_POSTMASTER, RESOURCES_MGM,
@@ -8306,14 +8326,24 @@ static struct config_string ConfigureNamesString[] =
 		"", NULL, NULL
 	},
 
-    {
-        {"hawq_rm_stmt_vseg_memory", PGC_USERSET, RESOURCES_MGM,
-            gettext_noop("the memory quota of one virtual segment for one statement."),
-            NULL
-        },
-        &rm_stmt_vseg_mem_str,
-        "128mb", assign_hawq_rm_stmt_vseg_memory, NULL
-    },
+	{
+		{"hawq_rm_stmt_vseg_memory", PGC_USERSET, RESOURCES_MGM,
+			gettext_noop("the memory quota of one virtual segment for one statement."),
+			NULL
+		},
+		&rm_stmt_vseg_mem_str,
+		"128mb", assign_hawq_rm_stmt_vseg_memory, NULL
+	},
+
+	{
+		{"hawq_hashjoin_bloomfilter_max_memory_size", PGC_USERSET, GP_ARRAY_TUNING,
+			gettext_noop("The maximum memory size for bloom filter in hash join, with KB or MB"),
+			NULL,
+			GUC_NO_SHOW_ALL
+		},
+		&hawq_hashjoin_bloomfilter_max_memory_size,
+		"2mb", NULL, NULL
+	},
 
 	{
 		{"hawq_re_cgroup_mount_point", PGC_POSTMASTER, RESOURCES_MGM,

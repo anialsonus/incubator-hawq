@@ -3323,6 +3323,8 @@ _readHashJoin(const char ** str)
 
 	READ_NODE_FIELD(hashclauses);
 	READ_NODE_FIELD(hashqualclauses);
+	READ_BOOL_FIELD(useRuntimeFilter);
+	READ_INT_FIELD(estimatedInnerNum);
 
 	READ_DONE();
 }
@@ -3815,6 +3817,7 @@ void readPlanInfo(const char ** str, Plan *local_node)
     READ_NODE_FIELD(initPlan);
     
     READ_UINT64_FIELD(operatorMemKB);
+    READ_BOOL_FIELD(vectorized);
 }
 
 void readJoinInfo(const char ** str, Join *local_node)
