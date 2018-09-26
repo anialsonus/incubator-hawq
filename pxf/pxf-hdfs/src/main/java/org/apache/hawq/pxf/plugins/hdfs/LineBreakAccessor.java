@@ -71,6 +71,12 @@ public class LineBreakAccessor extends HdfsSplittableDataAccessor implements
     public boolean openForWrite() throws Exception {
 
         String fileName = inputData.getDataSource();
+        // If the user-defined write path was absolute, fileName now contains a path with two slashes in the beginning
+        // We check the path (without regex, just comparing two symbols in this simple case) and remove the first slash if necessary
+        if (fileName.charAt(1) == '/' && fileName.charAt(0) == '/') {
+            fileName = fileName.substring(1);
+            inputData.setDataSource(fileName);
+        }
         String compressCodec = inputData.getUserProperty("COMPRESSION_CODEC");
         CompressionCodec codec = null;
 
@@ -92,7 +98,9 @@ public class LineBreakAccessor extends HdfsSplittableDataAccessor implements
         }
         org.apache.hadoop.fs.Path parent = file.getParent();
         if (!fs.exists(parent)) {
-            fs.mkdirs(parent);
+            if (!fs.mkdirs(parent)) {
+                throw new IOException("Creation of dir '" + parent.toString() + "' failed");
+            }
             LOG.debug("Created new dir " + parent.toString());
         }
 
