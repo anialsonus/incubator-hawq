@@ -163,6 +163,12 @@ public class HiveUtilities {
      */
     public static HiveMetaStoreClient initHiveClient(HiveConf conf) {
         HiveMetaStoreClient client = null;
+        String principal = conf.get("hive.server2.authentication.kerberos.principal").replace("/_HOST", "");
+        HiveUtilities.authenticate(
+            conf,
+            principal,
+            conf.get("hive.server2.authentication.kerberos.keytab")
+        );
         try {
             client = new HiveMetaStoreClient(conf);
         } catch (MetaException cause) {
