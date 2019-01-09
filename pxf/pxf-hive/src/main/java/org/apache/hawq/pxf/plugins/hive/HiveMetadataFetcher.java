@@ -37,6 +37,7 @@ import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.serde.serdeConstants;
 import org.apache.hadoop.mapred.JobConf;
+import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.mapred.InputFormat;
 import org.apache.hawq.pxf.api.Metadata;
 import org.apache.hawq.pxf.api.MetadataFetcher;
@@ -79,6 +80,9 @@ public class HiveMetadataFetcher extends MetadataFetcher {
      */
     @Override
     public List<Metadata> getMetadata(String pattern) throws Exception {
+        if (HiveUtilities.isKerberosAuthEnabled()) {
+            UserGroupInformation.getLoginUser().checkTGTAndReloginFromKeytab();
+        }
 
         boolean ignoreErrors = false;
         List<Metadata.Item> tblsDesc = HiveUtilities.extractTablesFromPattern(client, pattern);

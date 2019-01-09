@@ -29,7 +29,6 @@ import java.util.ListIterator;
 import java.util.Properties;
 
 import org.apache.commons.lang.StringUtils;
-import org.apache.commons.lang3.Validate;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
@@ -66,32 +65,6 @@ import org.apache.hawq.pxf.plugins.hive.HiveUserData;
  * and interacting with Hive.
  */
 public class HiveUtilities {
-
-
-    public static synchronized UserGroupInformation authenticate(final Configuration hiveConfig, String principal, String keyTab) {
-        Validate.notNull(hiveConfig);
-        final String auth = hiveConfig.get("hadoop.security.authentication");
-        if(auth != null && auth.equals("kerberos")) {
-            Validate.notNull(principal);
-            Validate.notNull(keyTab);
-            if(System.getProperty("java.security.krb5.conf") == null){
-                System.setProperty("java.security.krb5.conf", hiveConfig.get("java.security.krb5.conf", "/etc/krb5.conf"));
-            }
-            UserGroupInformation.setConfiguration(hiveConfig);
-            try {
-                UserGroupInformation.loginUserFromKeytab(principal.trim(), keyTab.trim());
-            } catch (IOException e) {
-                throw new RuntimeException("Failed login from keytab : " + e.getMessage(), e);
-            }
-        }
-        try {
-            return UserGroupInformation.getCurrentUser();
-        } catch (IOException e) {
-            throw new RuntimeException("Failed get current user: " + e.getMessage(), e);
-        }
-
-    }
-
     /** Defines the Hive serializers (serde classes) currently supported in pxf */
     public enum PXF_HIVE_SERDES {
         COLUMNAR_SERDE("org.apache.hadoop.hive.serde2.columnar.ColumnarSerDe"),
@@ -135,6 +108,16 @@ public class HiveUtilities {
     private static final Log LOG = LogFactory.getLog(HiveUtilities.class);
     private static final String WILDCARD = "*";
 
+    // Hive secure login property names
+    private static final String CONFIG_KEY_KERBEROS_CONF = "java.security.krb5.conf";
+    private static final String KEY_HIVE_PRINCIPAL = "hive.server2.authentication.kerberos.principal";
+    private static final String KEY_HIVE_KEYTAB = "hive.server2.authentication.kerberos.keytab";
+
+    /**
+     * Hive UserGroupInformation
+     */
+    private static HiveConf hiveConf = null;
+
     /**
      * Default Hive DB (schema) name.
      */
@@ -145,14 +128,60 @@ public class HiveUtilities {
     static final String STR_ORC_FILE_INPUT_FORMAT = "org.apache.hadoop.hive.ql.io.orc.OrcInputFormat";
     private static final int DEFAULT_DELIMITER_CODE = 44;
 
+
     /**
-     * Initializes the HiveMetaStoreClient
-     * Uses classpath configuration files to locate the MetaStore
-     *
-     * @return initialized client
+     * @return whether Kerberos authentication for Hive is enabled
      */
-    public static HiveMetaStoreClient initHiveClient() {
-        return initHiveClient(new HiveConf());
+    public static boolean isKerberosAuthEnabled() {
+        try {
+            HiveConf config = hiveConf != null ? hiveConf : new HiveConf();
+            final String auth = config.get("hadoop.security.authentication");
+            if (auth != null && auth.equals("kerberos")) {
+                return true;
+            }
+        }
+        catch (Exception ex) {
+            LOG.debug("An exception happened when checking Kerberos auth: " + ex.toString());
+        }
+        return false;
+    }
+
+    /**
+     * Ensure this client is authenticated via Kerberos
+     *
+     * @return {@link HiveUtilities}.hiveConf
+     */
+    private static synchronized void authenticate() {
+        if (hiveConf == null && isKerberosAuthEnabled()) {
+            // Kerberos authentication is required
+            HiveConf config = new HiveConf(HiveMetaStoreClient.class);
+
+            if (System.getProperty(CONFIG_KEY_KERBEROS_CONF) == null) {
+                System.setProperty(
+                    CONFIG_KEY_KERBEROS_CONF,
+                    config.get(CONFIG_KEY_KERBEROS_CONF, "/etc/krb5.conf")
+                );
+            }
+            config.set(
+                KEY_HIVE_PRINCIPAL,
+                config.get(KEY_HIVE_PRINCIPAL).replace("/_HOST", "")
+            );
+
+            UserGroupInformation.setConfiguration(config);
+
+            try {
+                // TODO? replace with 'SecurityUtil.login(config, CONFIG_KEY_HIVE_KEYTAB, CONFIG_KEY_HIVE_PRINCIPAL);'
+                UserGroupInformation.loginUserFromKeytab(
+                    config.get(KEY_HIVE_PRINCIPAL).trim(),
+                    config.get(KEY_HIVE_KEYTAB).trim()
+                );
+            }
+            catch (IOException e) {
+                throw new RuntimeException("Failed login from keytab : " + e.getMessage(), e);
+            }
+
+            hiveConf = config;
+        }
     }
 
     /**
@@ -161,16 +190,11 @@ public class HiveUtilities {
      *
      * @return initialized client
      */
-    public static HiveMetaStoreClient initHiveClient(HiveConf conf) {
+    public static HiveMetaStoreClient initHiveClient() {
+        HiveUtilities.authenticate();
         HiveMetaStoreClient client = null;
-        String principal = conf.get("hive.server2.authentication.kerberos.principal").replace("/_HOST", "");
-        HiveUtilities.authenticate(
-            conf,
-            principal,
-            conf.get("hive.server2.authentication.kerberos.keytab")
-        );
         try {
-            client = new HiveMetaStoreClient(conf);
+            client = new HiveMetaStoreClient(new HiveConf());
         } catch (MetaException cause) {
             throw new RuntimeException("Failed connecting to Hive MetaStore service: " + cause.getMessage(), cause);
         }

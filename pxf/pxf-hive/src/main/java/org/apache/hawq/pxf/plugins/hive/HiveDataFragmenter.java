@@ -46,6 +46,7 @@ import org.apache.hadoop.mapred.InputFormat;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.TextInputFormat;
+import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hawq.pxf.api.BasicFilter;
 import org.apache.hawq.pxf.api.FilterParser;
 import org.apache.hawq.pxf.api.Fragment;
@@ -164,6 +165,9 @@ public class HiveDataFragmenter extends Fragmenter {
      * InputFormat and Serde per split.
      */
     private void fetchTableMetaData(Metadata.Item tblDesc) throws Exception {
+        if (HiveUtilities.isKerberosAuthEnabled()) {
+            UserGroupInformation.getLoginUser().checkTGTAndReloginFromKeytab();
+        }
 
         Table tbl = HiveUtilities.getHiveTable(client, tblDesc);
 
@@ -427,9 +431,9 @@ public class HiveDataFragmenter extends Fragmenter {
             return false;
         }
 
-        /* 
-         * HAWQ-1527 - Filtering only supported for partition columns of type string or 
-         * intgeral datatype. Integral datatypes include - TINYINT, SMALLINT, INT, BIGINT. 
+        /*
+         * HAWQ-1527 - Filtering only supported for partition columns of type string or
+         * intgeral datatype. Integral datatypes include - TINYINT, SMALLINT, INT, BIGINT.
          * Note that with integral data types only equals("=") and not equals("!=") operators
          * are supported. There are no operator restrictions with String.
          */
