@@ -8,9 +8,9 @@ package org.apache.hawq.pxf.plugins.hive;
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
@@ -31,6 +31,7 @@ import java.util.Set;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.HiveMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.Partition;
@@ -38,6 +39,7 @@ import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.serde.serdeConstants;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.InputFormat;
+import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hawq.pxf.api.Metadata;
 import org.apache.hawq.pxf.api.MetadataFetcher;
 import org.apache.hawq.pxf.api.OutputFormat;
@@ -57,14 +59,22 @@ public class HiveMetadataFetcher extends MetadataFetcher {
     private static final Log LOG = LogFactory.getLog(HiveMetadataFetcher.class);
     private HiveMetaStoreClient client;
     private JobConf jobConf;
+    private volatile UserGroupInformation ugi;
+
 
     public HiveMetadataFetcher(InputData md) {
-        super(md);
+        this(md, new HiveConf());
+    }
 
+    public HiveMetadataFetcher(InputData md, HiveConf conf) {
+        super(md);
+        String principal = conf.get("hive.server2.authentication.kerberos.principal").replace("/_HOST", "");
+        ugi = HiveUtilities.authenticate(conf, principal, conf.get("hive.server2.authentication.kerberos.keytab"));
         // init hive metastore client connection.
-        client = HiveUtilities.initHiveClient();
+        client = HiveUtilities.initHiveClient(conf);
         jobConf = new JobConf(new Configuration());
     }
+
 
     /**
      * Fetches metadata of hive tables corresponding to the given pattern
@@ -79,7 +89,9 @@ public class HiveMetadataFetcher extends MetadataFetcher {
      */
     @Override
     public List<Metadata> getMetadata(String pattern) throws Exception {
-
+        synchronized (this) {
+            ugi.checkTGTAndReloginFromKeytab();
+        }
         boolean ignoreErrors = false;
         List<Metadata.Item> tblsDesc = HiveUtilities.extractTablesFromPattern(client, pattern);
 

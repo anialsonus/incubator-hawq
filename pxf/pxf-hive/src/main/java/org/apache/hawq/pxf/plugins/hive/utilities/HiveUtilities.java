@@ -8,9 +8,9 @@ package org.apache.hawq.pxf.plugins.hive.utilities;
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
@@ -21,6 +21,7 @@ package org.apache.hawq.pxf.plugins.hive.utilities;
 
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.ArrayList;
@@ -28,6 +29,7 @@ import java.util.ListIterator;
 import java.util.Properties;
 
 import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.Validate;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
@@ -43,6 +45,7 @@ import org.apache.hadoop.hive.serde.serdeConstants;
 import org.apache.hadoop.hive.serde2.*;
 import org.apache.hadoop.hive.ql.io.orc.OrcFile;
 import org.apache.hadoop.hive.ql.io.orc.Reader;
+import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hawq.pxf.api.Metadata;
 import org.apache.hawq.pxf.api.Metadata.Field;
 import org.apache.hawq.pxf.api.Metadata.Item;
@@ -63,6 +66,31 @@ import org.apache.hawq.pxf.plugins.hive.HiveUserData;
  * and interacting with Hive.
  */
 public class HiveUtilities {
+
+
+    public static synchronized UserGroupInformation authenticate(final Configuration hiveConfig, String principal, String keyTab) {
+        Validate.notNull(hiveConfig);
+        final String auth = hiveConfig.get("hadoop.security.authentication");
+        if(auth != null && auth.equals("kerberos")) {
+            Validate.notNull(principal);
+            Validate.notNull(keyTab);
+            if(System.getProperty("java.security.krb5.conf") == null){
+                System.setProperty("java.security.krb5.conf", hiveConfig.get("java.security.krb5.conf", "/etc/krb5.conf"));
+            }
+            UserGroupInformation.setConfiguration(hiveConfig);
+            try {
+                UserGroupInformation.loginUserFromKeytab(principal.trim(), keyTab.trim());
+            } catch (IOException e) {
+                throw new RuntimeException("Failed login from keytab : " + e.getMessage(), e);
+            }
+        }
+        try {
+            return UserGroupInformation.getCurrentUser();
+        } catch (IOException e) {
+            throw new RuntimeException("Failed get current user: " + e.getMessage(), e);
+        }
+
+    }
 
     /** Defines the Hive serializers (serde classes) currently supported in pxf */
     public enum PXF_HIVE_SERDES {
@@ -124,9 +152,19 @@ public class HiveUtilities {
      * @return initialized client
      */
     public static HiveMetaStoreClient initHiveClient() {
+        return initHiveClient(new HiveConf());
+    }
+
+    /**
+     * Initializes the HiveMetaStoreClient
+     * Uses classpath configuration files to locate the MetaStore
+     *
+     * @return initialized client
+     */
+    public static HiveMetaStoreClient initHiveClient(HiveConf conf) {
         HiveMetaStoreClient client = null;
         try {
-            client = new HiveMetaStoreClient(new HiveConf());
+            client = new HiveMetaStoreClient(conf);
         } catch (MetaException cause) {
             throw new RuntimeException("Failed connecting to Hive MetaStore service: " + cause.getMessage(), cause);
         }
