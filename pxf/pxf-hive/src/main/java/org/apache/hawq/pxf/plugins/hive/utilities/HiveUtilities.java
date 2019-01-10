@@ -136,12 +136,13 @@ public class HiveUtilities {
         try {
             HiveConf config = hiveConf != null ? hiveConf : new HiveConf();
             final String auth = config.get("hadoop.security.authentication");
-            if (auth != null && auth.equals("kerberos")) {
+            if (auth != null && auth.toLowerCase().equals("kerberos")) {
+                LOG.debug("Kerberos authentication for Hive is enabled");
                 return true;
             }
         }
         catch (Exception ex) {
-            LOG.debug("An exception happened when checking Kerberos auth: " + ex.toString());
+            LOG.debug("An exception happened when checking Kerberos authentication for Hive: " + ex.toString());
         }
         return false;
     }
@@ -154,6 +155,7 @@ public class HiveUtilities {
     private static synchronized void authenticate() {
         if (hiveConf == null && isKerberosAuthEnabled()) {
             // Kerberos authentication is required
+            LOG.debug("Start Kerberos authentication for Hive");
             HiveConf config = new HiveConf(HiveMetaStoreClient.class);
 
             if (System.getProperty(CONFIG_KEY_KERBEROS_CONF) == null) {
@@ -181,6 +183,7 @@ public class HiveUtilities {
             }
 
             hiveConf = config;
+            LOG.debug("Kerberos authentication for Hive successful");
         }
     }
 
