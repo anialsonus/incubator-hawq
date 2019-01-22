@@ -34,54 +34,19 @@ public class IgnitePlugin extends Plugin {
      * @param inputData
      * @throws UserDataException if the request parameter is malformed
      */
-    public IgnitePlugin(InputData inputData) throws UserDataException, NumberFormatException {
+    public IgnitePlugin(InputData inputData) throws UserDataException {
         super(inputData);
 
-        String hostParameter = inputData.getUserProperty("HOST");
-        String hostsParameter = inputData.getUserProperty("HOSTS");
-        if (hostsParameter != null) {
-            hosts = hostsParameter;
-        }
-        else if (hostParameter != null) {
-            hosts = hostParameter;
-        }
-        else {
-            throw new UserDataException("HOST or HOSTS parameter must be provided");
-        }
+        // Connection parameters
+        configPath = inputData.getUserProperty("CONFIG");
+        cacheName = inputData.getUserProperty("CACHE") != null ? inputData.getUserProperty("CACHE") : "DEFAULT";
 
-        // This is not a required parameter, and null is a valid default value
-        igniteCache = inputData.getUserProperty("IGNITE_CACHE");
+        // Schema name
+        schema = inputData.getUserProperty("SCHEMA");
 
-        // This is not a required parameter, and null is a valid default value
-        user = inputData.getUserProperty("USER");
-        if (user != null) {
-            // This is not a required parameter, and null is a valid default value
-            password = inputData.getUserProperty("PASSWORD");
-        }
-
-        // This is not a required parameter
-        String bufferSizeParameter = inputData.getUserProperty("BUFFER_SIZE");
-        if (bufferSizeParameter != null) {
-            bufferSize = Integer.parseInt(bufferSizeParameter);
-            if (bufferSize <= 0) {
-                throw new NumberFormatException("BUFFER_SIZE must be a positive integer");
-            }
-        }
-
-        String lazyParameter = inputData.getUserProperty("LAZY");
-        if (lazyParameter != null) {
-            lazy = true;
-        }
-
-        String tcpNoDelayParameter = inputData.getUserProperty("I_TCP_NO_DELAY");
-        if (tcpNoDelayParameter != null) {
-            tcpNoDelay = true;
-        }
-
-        String replicatedOnlyParameter = inputData.getUserProperty("I_REPLICATED_ONLY");
-        if (replicatedOnlyParameter != null) {
-            replicatedOnly = true;
-        }
+        // Query execution flags
+        flagLazy = inputData.getUserProperty("LAZY") != null ? true : false;
+        flagReplicatedOnly = inputData.getUserProperty("REPLICATED_ONLY") != null ? true : false;
     }
 
     @Override
@@ -89,18 +54,12 @@ public class IgnitePlugin extends Plugin {
         return true;
     }
 
-    // Connection parameters
-    protected String hosts = null;
-    protected String igniteCache = null;
-    protected String user = null;
-    protected String password = null;
+    // Ignite configuration parameters
+    protected String configPath = null;
+    protected String cacheName = null;
 
-    // ReceiveBufferSize or SendBufferSize (depends on type of query)
-    protected int bufferSize = 0;
-
-    // Lazy SELECTs
-    protected boolean lazy = false;
-
-    protected boolean tcpNoDelay = false;
-    protected boolean replicatedOnly = false;
+    // Query parameters
+    protected String schema = null;
+    protected boolean flagReplicatedOnly;
+    protected boolean flagLazy;
 }

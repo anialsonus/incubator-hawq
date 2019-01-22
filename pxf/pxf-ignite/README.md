@@ -22,15 +22,11 @@ LOCATION ('pxf://<ignite_table_name>?PROFILE=Ignite[&<extra-parameter>&<extra-pa
 FORMAT 'CUSTOM' (formatter='pxfwritable_import');
 ```
 where each `<extra-parameter>` is one of the following:
-* `HOST=<ignite_host_address_with_port>`. The location of Ignite client node;
-* `HOSTS=<ignite_host_addresses_with_ports_divided_by_', '>`. The location of multiple Ignite client nodes; the one to be used will be chosen randomly during query execution;
-* `IGNITE_CACHE=<ignite_cache_name>`. The name of Ignite cache to use. If not given, this parameter is not included in queries from PXF to Ignite, thus Ignite default values will be used (at the moment, this is `Default` cache);
-* `BUFFER_SIZE=<unsigned_int>`. The number of tuples send to (from) Ignite per a response. The same number of tuples is stored in in-plug-in cache;
-* `USER=<string>`. Ignite user name;
-* `PASSWORD=<string>`. Ignite user password;
-* `LAZY=<any_value>`. If this parameter is present, perform lazy SELECTs (the Ignite will not store data on the node the PXF is connected to; instead, it will send it in portions to PXF over time). This may increase query execution time;
-* `I_TCP_NO_DELAY=<any_value>`. If this parameter is present, make Ignite always send TCP packets immediately when they are emitted. If this parameter is NOT present, such packets are collected and bigger packets are formed of smaller ones.
-* `I_REPLICATED_ONLY=<any_value>`. If this parameter is present, it signalizes to Ignite that the query contains only replicated tables. This is a hint for potentially more effective execution.
+* `CONFIG=<path>`. Path to Ignite thick client configuration. If not present, close the last opened client;
+* `CACHE=<cache_name>`. Name of a cache in Ignite to use. If not present, `"Default"` is used;
+* `SCHEMA=<schema_name>`. Name of a schema in Ignite to use. If not present, current cache schema is used;
+* `LAZY=<any_value>`. If this parameter is present, tell Ignite to perform lazy SELECTs (the Ignite will not store data in thick client; instead, it will send it in portions to PXF over time). This may increase query execution time, but will prevent some out-of-memory crashes on Ignite side;
+* `REPLICATED_ONLY=<any_value>`. If this parameter is present, tell Ignite the query is over "replicated" tables. This is a hint for potentially more effective execution;
 * `PARTITION_BY=<column>:<column_type>`. See below;
 * `RANGE=<start_value>:<end_value>`. See below;
 * `INTERVAL=<value>[:<unit>]`. See below.

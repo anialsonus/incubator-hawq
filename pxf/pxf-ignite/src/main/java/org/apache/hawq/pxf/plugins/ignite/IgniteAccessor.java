@@ -33,13 +33,14 @@ import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.concurrent.Semaphore;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
+import org.apache.ignite.Ignite;
+import org.apache.ignite.IgniteCache;
 import org.apache.ignite.Ignition;
-import org.apache.ignite.configuration.ClientConfiguration;
-import org.apache.ignite.client.IgniteClient;
 import org.apache.ignite.cache.query.FieldsQueryCursor;
 import org.apache.ignite.cache.query.SqlFieldsQuery;
 
@@ -47,11 +48,65 @@ import org.apache.ignite.cache.query.SqlFieldsQuery;
  * PXF-Ignite accessor class
  */
 public class IgniteAccessor extends IgnitePlugin implements ReadAccessor, WriteAccessor {
+    private static final Log LOG = LogFactory.getLog(IgniteAccessor.class);
+
+    // A pattern to cut extra parameters from 'InputData.dataSource' when write operation is performed. See {@link openForWrite()} for the details
+    private static final Pattern writeAddressPattern = Pattern.compile("/(.*)/[0-9]*-[0-9]*_[0-9]*");
+
+    // Protecting Semapthore for Ignite thick client variables
+    private static Semaphore igniteSem = new Semaphore(1, true);
+    // An instance of Ignite thick client and its configure path
+    private static Ignite ignite = null;
+    private static String currentConfigPath = null;
+
+    // An instance of Ignite cache. Used by both write and read pipelines
+    private IgniteCache<Object, Object> cache = null;
+
+    // Read pipeline variables
+    private FieldsQueryCursor<List<?>> readCursor = null;
+    private Iterator<List<?>> readIterator = null;
+
+    // Write pipeline variables
+    private SqlFieldsQuery writeQuery = null;
+
+
     /**
      * Class constructor
      */
-    public IgniteAccessor(InputData inputData) throws UserDataException {
+    public IgniteAccessor(InputData inputData) throws Exception {
         super(inputData);
+        try {
+            igniteSem.acquire();
+
+            if ((ignite == null) || (!currentConfigPath.equals(configPath))) {
+                if (ignite == null) {
+                    if (configPath == null) {
+                        throw new UserDataException("'CONFIG' parameter (path to Ignite configuration file) is required to connect to Ignite");
+                    }
+                }
+                else {
+                    LOG.info("Closing Ignite thick client with config at '" + currentConfigPath + "'...");
+                    ignite.close();
+                    ignite = null;
+                    currentConfigPath = null;
+                    LOG.info("Ignite thick client closed");
+                    if (configPath == null) {
+                        throw new RuntimeException("Ignite thick client closed successfully, query execution is prevented");
+                    }
+                }
+                LOG.info("Launching Ignite thick client with config at '" + configPath + "'...");
+                ignite = Ignition.start(configPath);
+                currentConfigPath = configPath;
+                LOG.info("Ignite thick client launched");
+            }
+
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("Constructed IgniteAccessor");
+            }
+        }
+        finally {
+            igniteSem.release();
+        }
     }
 
     /**
@@ -59,34 +114,30 @@ public class IgniteAccessor extends IgnitePlugin implements ReadAccessor, WriteA
      */
     @Override
     public boolean openForRead() throws Exception {
-        ClientConfiguration cfg = new ClientConfiguration();
-        cfg.setAddresses(hosts);
-        if (user != null) {
-            cfg.setUserName(user);
+        // Instantiate cache
+        try {
+            igniteSem.acquire();
+            cache = ignite.cache(cacheName);
+            if (cache == null) {
+                throw new RuntimeException("Ignite returned 'null' when creating cache '" + cacheName + "'");
+            }
         }
-        if (password != null) {
-            cfg.setUserPassword(password);
+        finally {
+            igniteSem.release();
         }
-        if (bufferSize > 0) {
-            cfg.setReceiveBufferSize(bufferSize);
-        }
-        cfg.setTcpNoDelay(tcpNoDelay);
 
+        // Build SELECT query
         SqlFieldsQuery query = buildSelectQuery();
-        query.setLazy(lazy);
-        query.setReplicatedOnly(replicatedOnly);
-        if (igniteCache != null) {
-            query.setSchema(igniteCache);
-        }
+        query.setSchema(schema);
+        query.setLazy(flagLazy);
+        query.setReplicatedOnly(flagReplicatedOnly);
 
+        // Get cursor
         if (LOG.isDebugEnabled()) {
             LOG.debug("openForRead(): making a request to Ignite. Query: '" + query.getSql() + "'");
         }
-
-        igniteClient = Ignition.startClient(cfg);
-        readIgniteCursor = igniteClient.query(query);
-        readIterator = readIgniteCursor.iterator();
-
+        readCursor = cache.query(query);
+        readIterator = readCursor.iterator();
         if (LOG.isDebugEnabled()) {
             LOG.debug("openForRead() finished successfully");
         }
@@ -116,19 +167,19 @@ public class IgniteAccessor extends IgnitePlugin implements ReadAccessor, WriteA
     public void closeForRead() throws Exception {
         Exception exception = null;
 
-        if (readIgniteCursor != null) {
+        if (readCursor != null) {
             try {
-                readIgniteCursor.close();
-                readIgniteCursor = null;
+                readCursor.close();
+                readCursor = null;
             }
             catch(Exception e) {
                 exception = e;
             }
         }
-        if (igniteClient != null) {
+        if (cache != null) {
             try {
-                igniteClient.close();
-                igniteClient = null;
+                cache.close();
+                cache = null;
             }
             catch(Exception e) {
                 exception = e;
@@ -144,31 +195,22 @@ public class IgniteAccessor extends IgnitePlugin implements ReadAccessor, WriteA
      * openForWrite() implementation
      */
     @Override
-    public boolean openForWrite() throws UserDataException {
-        ClientConfiguration cfg = new ClientConfiguration();
-        cfg.setAddresses(hosts);
-        if (user != null) {
-            cfg.setUserName(user);
+    public boolean openForWrite() throws Exception {
+        // Instantiate cache
+        try {
+            igniteSem.acquire();
+            cache = ignite.cache(cacheName);
+            if (cache == null) {
+                throw new RuntimeException("Ignite returned 'null' when creating cache '" + cacheName + "'");
+            }
         }
-        if (password != null) {
-            cfg.setUserPassword(password);
-        }
-        if (bufferSize > 0) {
-            cfg.setSendBufferSize(bufferSize);
+        finally {
+            igniteSem.release();
         }
 
+        // Build INSERT query
         writeQuery = buildInsertQuery();
-        writeQuery.setSchema(igniteCache);
-
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("openForWrite(): connecting to Ignite");
-        }
-
-        igniteClient = Ignition.startClient(cfg);
-
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("openForWrite() finished successfully");
-        }
+        writeQuery.setSchema(schema);
 
         return true;
     }
@@ -181,7 +223,7 @@ public class IgniteAccessor extends IgnitePlugin implements ReadAccessor, WriteA
         Object[] args = (Object[])currentRow.getData();
         writeQuery.setArgs(args);
 
-        igniteClient.query(writeQuery).getAll();
+        cache.query(writeQuery).getAll();
 
         return true;
     }
@@ -193,10 +235,10 @@ public class IgniteAccessor extends IgnitePlugin implements ReadAccessor, WriteA
     public void closeForWrite() throws Exception {
         Exception exception = null;
 
-        if (igniteClient != null) {
+        if (cache != null) {
             try {
-                igniteClient.close();
-                igniteClient = null;
+                cache.close();
+                cache = null;
             }
             catch(Exception e) {
                 exception = e;
@@ -307,17 +349,4 @@ public class IgniteAccessor extends IgnitePlugin implements ReadAccessor, WriteA
 
         return new SqlFieldsQuery(sb.toString());
     }
-
-
-    private static final Log LOG = LogFactory.getLog(IgniteAccessor.class);
-
-    // A pattern to cut extra parameters from 'InputData.dataSource' when write operation is performed. See {@link openForWrite()} for the details
-    private static final Pattern writeAddressPattern = Pattern.compile("/(.*)/[0-9]*-[0-9]*_[0-9]*");
-
-    private IgniteClient igniteClient = null;
-
-    private FieldsQueryCursor<List<?>> readIgniteCursor = null;
-    private Iterator<List<?>> readIterator = null;
-
-    private SqlFieldsQuery writeQuery = null;
 }
