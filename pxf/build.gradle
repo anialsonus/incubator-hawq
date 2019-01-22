@@ -516,7 +516,7 @@ project('pxf-ignite') {
         compile(project(':pxf-service'))
         compile 'org.apache.commons:commons-compress:1.16.1'
         compile 'javax.cache:cache-api:1.0.0'
-        compile 'org.apache.ignite:ignite-core:2.6.0'
+        compile 'org.apache.ignite:ignite-core:2.7.0'
         testCompile 'org.apache.commons:commons-compress:1.16.1'
     }
 
