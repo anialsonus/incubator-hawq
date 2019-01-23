@@ -149,13 +149,8 @@ public class IgniteAccessor extends IgnitePlugin implements ReadAccessor, WriteA
      * readNextObject() implementation
      */
     @Override
-    public OneRow readNextObject() throws Exception {
-        try {
-            return new OneRow(readIterator.next());
-        }
-        catch(NoSuchElementException e) {
-            return null;
-        }
+    public OneRow readNextObject() throws NoSuchElementException {
+        return readIterator.hasNext() ? new OneRow(readIterator.next()) : null;
     }
 
     /**
