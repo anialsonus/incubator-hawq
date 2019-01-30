@@ -34,7 +34,9 @@ import javax.servlet.http.HttpServletRequest;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.hive.thrift.DelegationTokenIdentifier;
 import org.apache.hadoop.security.UserGroupInformation;
+import org.apache.hadoop.security.token.Token;
 import org.apache.hawq.pxf.service.SessionId;
 import org.apache.hawq.pxf.service.UGICache;
 import org.apache.hawq.pxf.service.utilities.SecureLogin;
@@ -110,10 +112,12 @@ public class SecurityServletFilter implements Filter {
             SecuredHDFS.verifyToken(tokenString, config.getServletContext());
 
             try {
+                Token<DelegationTokenIdentifier> token = SecureLogin.getMetastoreToken(gpdbUser);
                 // Retrieve proxy user UGI from the UGI of the logged in user
-                UserGroupInformation proxyUserGroupInformation = proxyUGICache
-                        .getUserGroupInformation(session);
-
+                UserGroupInformation proxyUserGroupInformation = proxyUGICache.getUserGroupInformation(session);
+                if (token != null) {
+                    proxyUserGroupInformation.addToken(token);
+                }
                 // Execute the servlet chain as that user
                 proxyUserGroupInformation.doAs(action);
             } catch (UndeclaredThrowableException ute) {
