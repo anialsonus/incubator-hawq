@@ -29,7 +29,9 @@ Both **PXF table** **and** a **table in external database** **must have the same
 * `TIMESTAMP`
 * `BYTEA`
 
-The `<full_external_table_name>` (see below) **must not match** the [pattern](https://docs.oracle.com/javase/7/docs/api/java/util/regex/Pattern.html) `/.*/[0-9]*-[0-9]*_[0-9]*` (the name must not start with `/` and have an ending that consists of `/` and three groups of numbers of arbitrary length, the first two separated by `-` and the last two separated by `_`. For example, the following table name is not allowed: `/public.table/1-2_3`).
+The `<full_external_table_name>` (see below) **must meet the following conditions**:
+* `<full_external_table_name>` must NOT match the [pattern](https://docs.oracle.com/javase/7/docs/api/java/util/regex/Pattern.html) `/.*/[0-9]*-[0-9]*_[0-9]*` (the name must not start with `/` and have an ending that consists of `/` and three groups of numbers of arbitrary length, the first two separated by `-` and the last two separated by `_`. For example, the following table name is not allowed: `/public.table/1-2_3`);
+* `<full_external_table_name>` must NOT contain `+`.
 
 At the moment, one PXF external table cannot serve both SELECT and INSERT queries. A separate PXF external table is required for each type of queries.
 
@@ -44,6 +46,8 @@ LOCATION (
 )
 FORMAT 'CUSTOM' (FORMATTER={'pxfwritable_import' | 'pxfwritable_export'})
 ```
+
+`<full_external_table_name>` may include spaces and special symbols. Spaces should be replaced by `+`. Most common special symbols (like `\`) are escaped automatically, thus they may be present as is.
 
 The **`<pxf_parameters>`** are:
 ```
@@ -68,7 +72,7 @@ The **`<jdbc_login_parameters>`** are **optional**, but if provided, both of the
 &PASS=<external_database_password>
 ```
 
-The **`<plugin_parameters>`** are **optional**.
+The **`<plugin_parameters>`** are **optional**. Note that if some parameter is present, it will be checked for correctness (e.g. `BATCH_SIZE` must be an integer).
 
 The meaning of `BATCH_SIZE` is given in section [batching of INSERT queries](#batching).
 
@@ -77,6 +81,8 @@ The meaning of `POOL_SIZE` is given in section [using thread pool for INSERT que
 The meaning of `PARTITION_BY`, `RANGE` and `INTERVAL` is given in section [partitioning](#partitioning).
 
 The meaning of `PRE_SQL` and `STOP_IF_PRE_FAILS` is given in section [Query precode](#query-precode).
+
+The meaning of `QUOTE_COLUMNS` is given in section [SELECT queries](#select-queries). This is a boolean parameter, only its presence is checked (though if present, it must have some value).
 
 ```
 [
@@ -93,6 +99,9 @@ The meaning of `PRE_SQL` and `STOP_IF_PRE_FAILS` is given in section [Query prec
 [
 &PRE_SQL=<string>[&STOP_IF_PRE_FAILS=<string>]
 ]
+[
+&QUOTE_COLUMNS=<any_string>
+]
 ```
 
 
@@ -102,63 +111,15 @@ The PXF JDBC plugin allows to perform SELECT queries to external tables.
 
 To perform SELECT queries, create an `EXTERNAL READABLE TABLE` or just an `EXTERNAL TABLE` with `FORMAT 'CUSTOM' (FORMATTER='pxfwritable_import')` in PXF.
 
-The `BATCH_SIZE` parameter is *not used* in such tables. *However*, if this parameter is present, its value will be checked for correctness (it must be an integer).
+The `QUOTE_COLUMNS` parameter makes PXF surround *all* column names with double quotes when querying an external data source. Use this option when column names require special treatment (e.g. they contain both upper- and lowercase letters, and the external database is case-sensitive).
 
 
-## INSERT queries
-
-The PXF JDBC plugin allows to perform INSERT queries to external tables. Note that **the plugin does not guarantee consistency for INSERT queries**. Use a staging table in external database to deal with this.
-
-To perform INSERT queries, create an `EXTERNAL WRITABLE TABLE` with `FORMAT 'CUSTOM' (FORMATTER='pxfwritable_export')` in PXF.
-
-The `PARTITION_BY`, `RANGE` and `INTERVAL` parameters in such tables are ignored.
-
-
-### Batching
-
-The INSERT queries can be batched. This may significantly increase perfomance if batching is supported by the external database.
-
-To enable batching, create an external table with the parameter `BATCH_SIZE` set to:
-* `integer > 1`. Batches of the given size will be used;
-* `integer < 0`. A batch of infinite size will be used (all tuples will be sent in one huge JDBC query). Note that this behaviour **may cause errors**, as each database has its own limit on the size of JDBC queries;
-* `0` or `1`. Batching will not be used.
-
-Batching must be supported by the JDBC driver of an external database. If the driver does not support batching, it will not be used, but PXF plugin will try to INSERT values anyway, and an information message will be added to PXF logs.
-
-By default (`BATCH_SIZE` is absent), batching is not used.
-
-
-## Thread pool
-
-The INSERT queries can be processed by multiple threads. This may significantly increase perfomance if the external database can work with multiple connections simultaneously.
-
-It is recommended to use batching together with a thread pool. In this case, each thread receives data from one (whole) batch and processes it. If a thread pool is used without batching, each thread in a pool will receive exactly one tuple; as a rule, this takes much more time than usual one-thread INSERT.
-
-If any of the threads from pool fails, the user will get the error message. However, if INSERT fails, some data still may be INSERTed into the external database.
-
-To enable thread pool, create an external table with the paramete `POOL_SIZE` set to:
-* `integer > 1`. Thread pool will consist of the given number of threads.
-* `integer < 1`. The number of threads in a pool will be equal to the number of CPUs in the system
-* `integer = 1`. Thread pool will be disabled
-
-By default (`POOL_SIZE` is absent), thread pool is not used.
-
-
-## Query precode
-
-Before executing any query, the PXF JDBC plugin can execute an extra SQL query (or a set of such queries).
-
-Pass the SQL query as an ordinary string (including `;` if necessary) as a parameter `PRE_SQL`.
-
-To prevent the plugin from executing the "main" `INSERT` or `SELECT` query, set a parameter `STOP_IF_PRE_FAILS` to any value. If this parameter is not present, the PXF JDBC plugin will continue execution of the "main" query even if precode fails, and a warning will be added to PXF logs.
-
-
-## Partitioning
+### Partitioning
 
 PXF JDBC plugin supports simultaneous *read* access to an external table from multiple PXF segments. This feature is called partitioning.
 
 
-### Syntax
+#### Syntax
 Use the following `<plugin_parameters>` (mentioned above) to activate partitioning:
 
 ```
@@ -186,14 +147,14 @@ Example partitions:
 * `&PARTITION_BY=grade:enum&RANGE=excellent:good:general:bad`
 
 
-### Mechanism
+#### Mechanism
 
 If partitioning is activated, the SELECT query is split into a set of small queries, each of which is called a *fragment*. All the fragments are processed by separate PXF instances simultaneously. If there are more fragments than PXF instances, some instances will process more than one fragment; if only one PXF instance is available, it will process all the fragments.
 
 Extra query constraints (`WHERE` expressions) are automatically added to each fragment to guarantee that every tuple of data is retrieved from the external database exactly once.
 
 
-### Partitioning example
+#### Partitioning example
 Consider the following MySQL table:
 ```
 CREATE TABLE sales (
@@ -216,6 +177,54 @@ FORMAT 'CUSTOM' (FORMATTER='pxfwritable_import');
 ```
 
 The PXF JDBC plugin will generate two fragments  for a query `SELECT * FROM sales`. Then HAWQ will assign each of them to a separate PXF segment. Each segment will perform the SELECT query, and the first one will get tuples with `cdate` values for year `2008`, while the second will get tuples for year `2009`. Then each PXF segment will send its results back to HAWQ, where they will be "concatenated" and returned.
+
+
+## INSERT queries
+
+The PXF JDBC plugin allows to perform INSERT queries to external tables. Note that **the plugin does not guarantee consistency for INSERT queries**. Use a staging table in external database to deal with this.
+
+To perform INSERT queries, create an `EXTERNAL WRITABLE TABLE` with `FORMAT 'CUSTOM' (FORMATTER='pxfwritable_export')` in PXF.
+
+The `PARTITION_BY`, `RANGE` and `INTERVAL` parameters in such tables are ignored.
+
+
+### Batching
+
+The INSERT queries can be batched. This may significantly increase perfomance if batching is supported by the external database.
+
+To enable batching, create an external table with the parameter `BATCH_SIZE` set to:
+* `integer > 1`. Batches of the given size will be used;
+* `integer < 0`. A batch of infinite size will be used (all tuples will be sent in one huge JDBC query). Note that this behaviour **may cause errors**, as each database has its own limit on the size of JDBC queries;
+* `0` or `1`. Batching will not be used.
+
+Batching must be supported by the JDBC driver of an external database. If the driver does not support batching, it will not be used, but PXF plugin will try to INSERT values anyway, and an information message will be added to PXF logs.
+
+By default (`BATCH_SIZE` is absent), batching is not used.
+
+
+### Thread pool
+
+The INSERT queries can be processed by multiple threads. This may significantly increase perfomance if the external database can work with multiple connections simultaneously.
+
+It is recommended to use batching together with a thread pool. In this case, each thread receives data from one (whole) batch and processes it. If a thread pool is used without batching, each thread in a pool will receive exactly one tuple; as a rule, this takes much more time than usual one-thread INSERT.
+
+If any of the threads from pool fails, the user will get the error message. However, if INSERT fails, some data still may be INSERTed into the external database.
+
+To enable thread pool, create an external table with the paramete `POOL_SIZE` set to:
+* `integer > 1`. Thread pool will consist of the given number of threads.
+* `integer < 1`. The number of threads in a pool will be equal to the number of CPUs in the system
+* `integer = 1`. Thread pool will be disabled
+
+By default (`POOL_SIZE` is absent), thread pool is not used.
+
+
+## Query precode
+
+Before executing any query, the PXF JDBC plugin can execute an extra SQL query (or a set of such queries).
+
+Pass the SQL query as an ordinary string (including `;` if necessary) as a parameter `PRE_SQL`.
+
+To prevent the plugin from executing the "main" `INSERT` or `SELECT` query, set a parameter `STOP_IF_PRE_FAILS` to any value. If this parameter is not present, the PXF JDBC plugin will continue execution of the "main" query even if precode fails, and a warning will be added to PXF logs.
 
 
 ## Examples

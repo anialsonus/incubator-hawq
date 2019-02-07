@@ -22,14 +22,9 @@ package org.apache.hawq.pxf.plugins.jdbc.utils;
 /**
  * Implements methods for the Microsoft SQL server database
  */
-public class MicrosoftProduct extends DbProduct {
+public class MicrosoftProduct extends PostgresProduct {
     @Override
     public String wrapDate(Object val){
-        return "'" + val + "'";
-    }
-
-    @Override
-    public String wrapTimestamp(Object val) {
         return "'" + val + "'";
     }
 }

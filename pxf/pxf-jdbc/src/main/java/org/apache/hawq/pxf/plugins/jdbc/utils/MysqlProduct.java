@@ -22,14 +22,9 @@ package org.apache.hawq.pxf.plugins.jdbc.utils;
 /**
  * Implements methods for the MySQL Database.
  */
-public class MysqlProduct extends DbProduct {
+public class MysqlProduct extends PostgresProduct {
     @Override
     public String wrapDate(Object val){
         return "DATE('" + val + "')";
-    }
-
-    @Override
-    public String wrapTimestamp(Object val) {
-        return "'" + val + "'";
     }
 }

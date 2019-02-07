@@ -112,6 +112,9 @@ public class JdbcPlugin extends Plugin {
             }
         }
 
+        // This parameter is not required. The default value is false
+        quoteColumns = (inputData.getUserProperty("QUOTE_COLUMNS") != null);
+
         // This parameter is not required. The default value is null
         preQuerySql = input.getUserProperty("PRE_SQL");
         if (preQuerySql != null) {
@@ -213,6 +216,7 @@ public class JdbcPlugin extends Plugin {
     // User-defined parameters for all queries
     protected String preQuerySql = null;
     protected boolean stopIfPreQueryFails = false;
+    protected boolean quoteColumns = false;
 
     // User-defined parameters for INSERT queries
     protected int batchSize = 0;

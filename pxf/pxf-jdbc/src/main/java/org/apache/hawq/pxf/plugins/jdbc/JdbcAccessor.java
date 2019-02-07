@@ -28,12 +28,6 @@ import org.apache.hawq.pxf.api.utilities.InputData;
 import org.apache.hawq.pxf.plugins.jdbc.writercallable.WriterCallable;
 import org.apache.hawq.pxf.plugins.jdbc.writercallable.WriterCallableFactory;
 
-import java.util.List;
-import java.util.LinkedList;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-
 import java.io.IOException;
 import java.text.ParseException;
 import java.sql.Statement;
@@ -44,6 +38,12 @@ import java.sql.SQLTimeoutException;
 import java.sql.BatchUpdateException;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -62,6 +62,23 @@ public class JdbcAccessor extends JdbcPlugin implements ReadAccessor, WriteAcces
      */
     public JdbcAccessor(InputData inputData) throws UserDataException {
         super(inputData);
+
+        // Fill columnsForQuery
+        if (quoteColumns) {
+            columnsForQuery = new ArrayList<ColumnDescriptor>(columns);
+            for (ColumnDescriptor column : columnsForQuery) {
+                column.setColumnName("\"" + column.columnName() + "\"");
+            }
+            if (LOG.isDebugEnabled()) {
+                LOG.debug(
+                    "QUOTE_COLUMNS is true. Resulting set of columns: " +
+                    columnsForQuery.toString()
+                );
+            }
+        }
+        else {
+            columnsForQuery = columns;
+        }
     }
 
     /**
@@ -320,7 +337,7 @@ public class JdbcAccessor extends JdbcPlugin implements ReadAccessor, WriteAcces
 
         // Insert columns' names
         String columnDivisor = "";
-        for (ColumnDescriptor column : columns) {
+        for (ColumnDescriptor column : columnsForQuery) {
             sb.append(columnDivisor);
             columnDivisor = ", ";
             sb.append(column.columnName());
@@ -354,7 +371,7 @@ public class JdbcAccessor extends JdbcPlugin implements ReadAccessor, WriteAcces
         // Insert columns' names
         sb.append("(");
         String fieldDivisor = "";
-        for (ColumnDescriptor column : columns) {
+        for (ColumnDescriptor column : columnsForQuery) {
             sb.append(fieldDivisor);
             fieldDivisor = ", ";
             sb.append(column.columnName());
@@ -366,7 +383,7 @@ public class JdbcAccessor extends JdbcPlugin implements ReadAccessor, WriteAcces
         // Insert values placeholders
         sb.append("(");
         fieldDivisor = "";
-        for (int i = 0; i < columns.size(); i++) {
+        for (int i = 0; i < columnsForQuery.size(); i++) {
             sb.append(fieldDivisor);
             fieldDivisor = ", ";
             sb.append("?");
@@ -454,6 +471,11 @@ public class JdbcAccessor extends JdbcPlugin implements ReadAccessor, WriteAcces
             }
         }
     }
+
+    // List of ColumnDescriptors to use for building query to external database
+    // This may differ from columns as external database may require column
+    // names in queries to be escaped by double quotes
+    private ArrayList<ColumnDescriptor> columnsForQuery = null;
 
     // Read variables
     private String queryRead = null;

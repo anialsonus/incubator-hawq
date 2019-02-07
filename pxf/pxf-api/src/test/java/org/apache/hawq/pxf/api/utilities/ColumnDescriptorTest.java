@@ -20,14 +20,13 @@ package org.apache.hawq.pxf.api.utilities;
  */
 
 import org.apache.hawq.pxf.api.utilities.ColumnDescriptor;
+
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import org.junit.Test;
 
 public class ColumnDescriptorTest {
-
-
     @Test
     public void testConstructor() {
 
@@ -42,10 +41,9 @@ public class ColumnDescriptorTest {
         assertArrayEquals(clonned.columnTypeModifiers(), cd.columnTypeModifiers());
         assertEquals(clonned.isKeyColumn(), cd.isKeyColumn());
 
-        //Cloned instance should have reference to different array
+        // Clonned instance should have reference to different array
         assertFalse(clonned.columnTypeModifiers() == cd.columnTypeModifiers());
 
         cd = new ColumnDescriptor(null, 0, 0, null, null);
     }
-
 }
