@@ -19,13 +19,22 @@ package org.apache.hawq.pxf.service.utilities;
  * under the License.
  */
 
+import java.io.IOException;
+
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.apache.hadoop.security.UserGroupInformation;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.metastore.HiveMetaStoreClient;
+import org.apache.hadoop.hive.thrift.DelegationTokenIdentifier;
+import org.apache.hadoop.io.Text;
 import org.apache.hadoop.security.SecurityUtil;
+import org.apache.hadoop.security.token.Token;
+import org.apache.hadoop.security.UserGroupInformation;
+
+import org.apache.thrift.TException;
 
 /**
  * This class relies heavily on Hadoop API to
@@ -105,5 +114,38 @@ public class SecureLogin {
      */
     public static boolean isUserImpersonationEnabled() {
         return StringUtils.equalsIgnoreCase(System.getProperty(PROPERTY_KEY_USER_IMPERSONATION, ""), "true");
+    }
+
+
+    /**
+     * Returns delegation token for Metastore connection
+     * @param gpdbUser greenplum user
+     *
+     * @throws RuntimeException Thrown when authentication fails
+     */
+    public static Token<DelegationTokenIdentifier> getMetastoreToken(String gpdbUser) {
+        HiveMetaStoreClient tokenFetchingClient = null;
+        try {
+            UserGroupInformation.getLoginUser().checkTGTAndReloginFromKeytab();
+            tokenFetchingClient = new HiveMetaStoreClient(new HiveConf());
+            if (tokenFetchingClient == null) {
+                return null;
+            }
+            String delegationTokenString = tokenFetchingClient.getDelegationToken(gpdbUser, gpdbUser);
+            if (delegationTokenString == null) {
+                return null;
+            }
+            Token<DelegationTokenIdentifier> delegationToken = new Token<>();
+            delegationToken.decodeFromUrlString(delegationTokenString);
+            delegationToken.setService(new Text(gpdbUser));
+            return delegationToken;
+        } catch (TException | IOException te) {
+            LOG.error("Metastore delegation token creation error: " + te.getMessage());
+            throw new RuntimeException(te);
+        } finally {
+            if (tokenFetchingClient != null) {
+                tokenFetchingClient.close();
+            }
+        }
     }
 }

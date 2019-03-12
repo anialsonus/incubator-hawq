@@ -47,7 +47,6 @@ import org.apache.hadoop.hive.ql.io.orc.Reader;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hawq.pxf.api.Metadata;
 import org.apache.hawq.pxf.api.Metadata.Field;
-import org.apache.hawq.pxf.api.Metadata.Item;
 import org.apache.hawq.pxf.api.UnsupportedTypeException;
 import org.apache.hawq.pxf.api.UserDataException;
 import org.apache.hawq.pxf.api.utilities.EnumHawqType;
@@ -110,9 +109,7 @@ public class HiveUtilities {
 
     // Hive secure login property names
     private static final String CONFIG_KEY_KERBEROS_CONF = "java.security.krb5.conf";
-    private static final String KEY_HIVE_PRINCIPAL = "hive.server2.authentication.kerberos.principal";
-    private static final String KEY_HIVE_KEYTAB = "hive.server2.authentication.kerberos.keytab";
-
+    private static final String METASTORE_TOKEN_SIGNATURE = "hive.metastore.token.signature";
     /**
      * Hive UserGroupInformation
      */
@@ -148,43 +145,29 @@ public class HiveUtilities {
     }
 
     /**
-     * Ensure this client is authenticated via Kerberos
+     * Ensure this client is authenticated via Kerberos and set signature for proxyUser
      *
      * @return {@link HiveUtilities}.hiveConf
      */
-    private static synchronized void authenticate() {
-        if (hiveConf == null && isKerberosAuthEnabled()) {
-            // Kerberos authentication is required
-            LOG.debug("Start Kerberos authentication for Hive");
-            HiveConf config = new HiveConf(HiveMetaStoreClient.class);
-
+    private static synchronized HiveConf restoreSignatureIfNeeded() {
+        HiveConf config = new HiveConf(HiveMetaStoreClient.class);
+        if (isKerberosAuthEnabled()) {
             if (System.getProperty(CONFIG_KEY_KERBEROS_CONF) == null) {
                 System.setProperty(
                     CONFIG_KEY_KERBEROS_CONF,
                     config.get(CONFIG_KEY_KERBEROS_CONF, "/etc/krb5.conf")
                 );
             }
-            config.set(
-                KEY_HIVE_PRINCIPAL,
-                config.get(KEY_HIVE_PRINCIPAL).replace("/_HOST", "")
-            );
-
-            UserGroupInformation.setConfiguration(config);
-
             try {
-                // TODO? replace with 'SecurityUtil.login(config, CONFIG_KEY_HIVE_KEYTAB, CONFIG_KEY_HIVE_PRINCIPAL);'
-                UserGroupInformation.loginUserFromKeytab(
-                    config.get(KEY_HIVE_PRINCIPAL).trim(),
-                    config.get(KEY_HIVE_KEYTAB).trim()
-                );
+                config.set(METASTORE_TOKEN_SIGNATURE, UserGroupInformation.getCurrentUser().getUserName());
+                LOG.debug("Set metastore token signature: " + UserGroupInformation.getCurrentUser().getUserName());
             }
             catch (IOException e) {
-                throw new RuntimeException("Failed login from keytab : " + e.getMessage(), e);
+                throw new RuntimeException(e.getMessage(), e);
             }
-
-            hiveConf = config;
-            LOG.debug("Kerberos authentication for Hive successful");
+            LOG.debug("Hive configuration initialized");
         }
+        return config;
     }
 
     /**
@@ -194,14 +177,13 @@ public class HiveUtilities {
      * @return initialized client
      */
     public static HiveMetaStoreClient initHiveClient() {
-        HiveUtilities.authenticate();
-        HiveMetaStoreClient client = null;
+        HiveConf conf = HiveUtilities.restoreSignatureIfNeeded();
         try {
-            client = new HiveMetaStoreClient(new HiveConf());
+            HiveMetaStoreClient client = new HiveMetaStoreClient(conf);
+            return client;
         } catch (MetaException cause) {
             throw new RuntimeException("Failed connecting to Hive MetaStore service: " + cause.getMessage(), cause);
         }
-        return client;
     }
 
     public static Table getHiveTable(HiveMetaStoreClient client, Metadata.Item itemName)
