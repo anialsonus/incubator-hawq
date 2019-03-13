@@ -112,12 +112,8 @@ public class SecurityServletFilter implements Filter {
             SecuredHDFS.verifyToken(tokenString, config.getServletContext());
 
             try {
-                Token<DelegationTokenIdentifier> token = SecureLogin.getMetastoreToken(gpdbUser);
                 // Retrieve proxy user UGI from the UGI of the logged in user
                 UserGroupInformation proxyUserGroupInformation = proxyUGICache.getUserGroupInformation(session);
-                if (token != null) {
-                    proxyUserGroupInformation.addToken(token);
-                }
                 // Execute the servlet chain as that user
                 proxyUserGroupInformation.doAs(action);
             } catch (UndeclaredThrowableException ute) {

@@ -19,7 +19,6 @@ package org.apache.hawq.pxf.plugins.hive.utilities;
  * under the License.
  */
 
-
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
@@ -42,9 +41,12 @@ import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.serde.serdeConstants;
 import org.apache.hadoop.hive.serde2.*;
+import org.apache.hadoop.hive.thrift.DelegationTokenIdentifier;
+import org.apache.hadoop.io.Text;
 import org.apache.hadoop.hive.ql.io.orc.OrcFile;
 import org.apache.hadoop.hive.ql.io.orc.Reader;
 import org.apache.hadoop.security.UserGroupInformation;
+import org.apache.hadoop.security.token.Token;
 import org.apache.hawq.pxf.api.Metadata;
 import org.apache.hawq.pxf.api.Metadata.Field;
 import org.apache.hawq.pxf.api.UnsupportedTypeException;
@@ -57,6 +59,7 @@ import org.apache.hawq.pxf.plugins.hive.HiveDataFragmenter;
 import org.apache.hawq.pxf.plugins.hive.HiveInputFormatFragmenter;
 import org.apache.hawq.pxf.plugins.hive.HiveTablePartition;
 import org.apache.hawq.pxf.plugins.hive.HiveInputFormatFragmenter.PXF_HIVE_INPUT_FORMATS;
+import org.apache.thrift.TException;
 import org.apache.hawq.pxf.plugins.hive.HiveUserData;
 
 /**
@@ -160,12 +163,22 @@ public class HiveUtilities {
             }
             try {
                 config.set(METASTORE_TOKEN_SIGNATURE, UserGroupInformation.getCurrentUser().getUserName());
-                LOG.debug("Set metastore token signature: " + UserGroupInformation.getCurrentUser().getUserName());
+                LOG.debug("Set metastore token signature: " + config.get(METASTORE_TOKEN_SIGNATURE));
             }
             catch (IOException e) {
                 throw new RuntimeException(e.getMessage(), e);
             }
             LOG.debug("Hive configuration initialized");
+
+            try {
+                Token<DelegationTokenIdentifier> token = getMetastoreToken(UserGroupInformation.getCurrentUser().getUserName());
+                if (token != null) {
+                    UserGroupInformation.getCurrentUser().addToken(token);
+                }
+            }
+            catch (IOException e) {
+                throw new RuntimeException(e.getMessage(), e);
+            }
         }
         return config;
     }
@@ -695,6 +708,36 @@ public class HiveUtilities {
 
         } catch (Exception e) {
             throw new RuntimeException("Exception while getting orc reader", e);
+        }
+    }
+
+    /**
+     * Returns delegation token for Metastore connection
+     * @param gpdbUser greenplum user
+     *
+     * @throws RuntimeException Thrown when authentication fails
+     */
+    public static Token<DelegationTokenIdentifier> getMetastoreToken(String gpdbUser) {
+        HiveMetaStoreClient tokenFetchingClient = null;
+        try {
+            UserGroupInformation.getLoginUser().checkTGTAndReloginFromKeytab();
+            tokenFetchingClient = new HiveMetaStoreClient(new HiveConf());
+
+            String delegationTokenString = tokenFetchingClient.getDelegationToken(gpdbUser, gpdbUser);
+            if (delegationTokenString == null) {
+                return null;
+            }
+            Token<DelegationTokenIdentifier> delegationToken = new Token<>();
+            delegationToken.decodeFromUrlString(delegationTokenString);
+            delegationToken.setService(new Text(gpdbUser));
+            return delegationToken;
+        } catch (TException | IOException te) {
+            LOG.error("Metastore delegation token creation error: " + te.getMessage());
+            throw new RuntimeException(te);
+        } finally {
+            if (tokenFetchingClient != null) {
+                tokenFetchingClient.close();
+            }
         }
     }
 }
