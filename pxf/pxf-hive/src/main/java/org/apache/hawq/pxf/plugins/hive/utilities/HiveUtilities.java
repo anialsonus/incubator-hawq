@@ -45,7 +45,6 @@ import org.apache.hadoop.hive.thrift.DelegationTokenIdentifier;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.hive.ql.io.orc.OrcFile;
 import org.apache.hadoop.hive.ql.io.orc.Reader;
-import org.apache.hadoop.security.SecurityUtil;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hawq.pxf.api.Metadata;
@@ -113,16 +112,14 @@ public class HiveUtilities {
 
     // PXF secure login properties' names
     private static final String PROPERTY_KEY_USER_IMPERSONATION = "pxf.service.user.impersonation.enabled";
-    private static final String CONFIG_KEY_SERVICE_PRINCIPAL = "pxf.service.kerberos.principal";
-    private static final String CONFIG_KEY_SERVICE_KEYTAB = "pxf.service.kerberos.keytab";
-    private static final String CONFIG_KEY_METASTORE_TOKEN_SIGNATURE = "hive.metastore.token.signature";
-    private static final String CONFIG_KEY_KERBEROS_CONF = "java.security.krb5.conf";
-    private static final String CONFIG_KEY_JGSS_CONF = "java.security.auth.login.config";
 
-    /**
-     * Hive UserGroupInformation
-     */
-    private static HiveConf hiveConf = null;
+    // Kerberos configuration parameters' names
+    private static final String CONFIG_KEY_PXF_KERBEROS_PRINCIPAL = "pxf.service.kerberos.principal";
+    private static final String CONFIG_KEY_PXF_KERBEROS_KEYTAB = "pxf.service.kerberos.keytab";
+    private static final String HIVECONF_KEY_KERBEROS_PRINCIPAL = "metastore.kerberos.principal";
+    private static final String HIVECONF_KEY_KERBEROS_KEYTAB = "metastore.kerberos.keytab.file";
+    // private static final String CONFIG_KEY_KERBEROS_CONF = "java.security.krb5.conf";
+    // private static final String CONFIG_KEY_JGSS_CONF = "java.security.auth.login.config";
 
     /**
      * Default Hive DB (schema) name.
@@ -143,107 +140,92 @@ public class HiveUtilities {
     }
 
     /**
-     * Returns delegation token for Metastore connection
-     *
-     * @param hiveConf Configuration to use to connect to metastore
-     * @param gpdbUser Greenplum user
-     *
-     * @throws RuntimeException Thrown when authentication fails
-     */
-    public static Token<DelegationTokenIdentifier> getMetastoreToken(HiveConf hiveConf, String gpdbUser) {
-        HiveMetaStoreClient tokenFetchingClient = null;
-        LOG.debug("Retrieving metastore token...");
-        try {
-            // Login to Hive
-            // try {
-            //     LOG.debug("Trying to login to Hive...");
-            //     UserGroupInformation.loginUserFromKeytab(hiveConf.get(CONFIG_KEY_SERVICE_PRINCIPAL), hiveConf.get(CONFIG_KEY_SERVICE_KEYTAB));
-            // }
-            // catch (IOException e) {
-            //     throw new RuntimeException("Could not login to Hive securely", e);
-            // }
-            // LOG.debug("Hive login successful");
-            // UserGroupInformation.getLoginUser().checkTGTAndReloginFromKeytab();
-
-            tokenFetchingClient = new HiveMetaStoreClient(hiveConf);
-
-            String delegationTokenString = tokenFetchingClient.getDelegationToken(gpdbUser, gpdbUser);
-            if (delegationTokenString == null) {
-                return null;
-            }
-            Token<DelegationTokenIdentifier> delegationToken = new Token<>();
-            delegationToken.decodeFromUrlString(delegationTokenString);
-            delegationToken.setService(new Text(gpdbUser));
-            LOG.debug("Successful metastore token retrieval");
-            return delegationToken;
-        }
-        catch (TException | IOException te) {
-            throw new RuntimeException("Could not retrieve metastore token", te);
-        }
-        finally {
-            if (tokenFetchingClient != null) {
-                tokenFetchingClient.close();
-            }
-        }
-    }
-
-    /**
      * Ensure this client is authenticated via Kerberos and set signature for proxyUser
      *
      * @return {@link HiveUtilities}.hiveConf
      */
     private static synchronized HiveConf restoreSignatureIfNeeded() {
-        HiveConf config = new HiveConf();
-        if (isKerberosAuthEnabled()) {
-            // Get current user UGI
-            UserGroupInformation currentUser;
-            try {
-                currentUser = UserGroupInformation.getCurrentUser();
-            }
-            catch (IOException e) {
-                throw new RuntimeException("Could not retrieve UserGroupInformation.currentUser", e);
-            }
+        HiveConf configuration = new HiveConf();
 
-            // Get Kerberos login parameters
-            String principal = System.getProperty(CONFIG_KEY_SERVICE_PRINCIPAL);
-            if (StringUtils.isEmpty(principal)) {
-                throw new RuntimeException("Kerberos Security requires a valid principal.");
-            }
-            String keytabFilename = System.getProperty(CONFIG_KEY_SERVICE_KEYTAB);
-            if (StringUtils.isEmpty(keytabFilename)) {
-                throw new RuntimeException("Kerberos Security requires a valid keytab file name.");
-            }
+        if (!isKerberosAuthEnabled()) {
+            return configuration;
+        }
 
-            config.set(CONFIG_KEY_SERVICE_PRINCIPAL, principal);
-            config.set(CONFIG_KEY_SERVICE_KEYTAB, keytabFilename);
-            config.set(CONFIG_KEY_METASTORE_TOKEN_SIGNATURE, currentUser.getUserName());
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("Kerberos principal: " + config.get(CONFIG_KEY_SERVICE_PRINCIPAL));
-                LOG.debug("Kerberos keytab: " + config.get(CONFIG_KEY_SERVICE_KEYTAB));
-                LOG.debug("Hive metastore token signature: " + config.get(CONFIG_KEY_METASTORE_TOKEN_SIGNATURE));
-                LOG.debug("Hive configuration initialized");
-            }
-            config.set("hadoop.security.authentication", "Kerberos");
+        // // Get current user UGI
+        // UserGroupInformation currentUser;
+        // try {
+        //     currentUser = UserGroupInformation.getCurrentUser();
+        // }
+        // catch (IOException e) {
+        //     throw new RuntimeException("Could not retrieve currentUser from UserGroupInformation", e);
+        // }
 
-            System.setProperty(
-                CONFIG_KEY_KERBEROS_CONF,
-                config.get(CONFIG_KEY_KERBEROS_CONF) == null ? "/etc/krb5.conf" : config.get(CONFIG_KEY_KERBEROS_CONF)
+        // Get Kerberos login parameters
+        String kerberosPrincipal = System.getProperty(CONFIG_KEY_PXF_KERBEROS_PRINCIPAL);
+        if (StringUtils.isEmpty(kerberosPrincipal)) {
+            throw new RuntimeException("Kerberos Security requires a valid principal.");
+        }
+        String kerberosKeytabFileName = System.getProperty(CONFIG_KEY_PXF_KERBEROS_KEYTAB);
+        if (StringUtils.isEmpty(kerberosKeytabFileName)) {
+            throw new RuntimeException("Kerberos Security requires a valid keytab file name.");
+        }
+
+        configuration.set(HIVECONF_KEY_KERBEROS_PRINCIPAL, kerberosPrincipal);
+        configuration.set(HIVECONF_KEY_KERBEROS_KEYTAB, kerberosKeytabFileName);
+        if (LOG.isDebugEnabled()) {
+            LOG.debug(
+                "Hive-Kerberos configuration initialized. Kerberos principal: '" +
+                configuration.get(HIVECONF_KEY_KERBEROS_PRINCIPAL) +
+                "'; Kerberos keytab file location: '" +
+                configuration.get(HIVECONF_KEY_KERBEROS_KEYTAB) +
+                "'"
             );
+        }
 
-            System.setProperty(
-                CONFIG_KEY_JGSS_CONF,
-                config.get(CONFIG_KEY_JGSS_CONF) == null ? "/etc/hive/conf.dist/jgss.conf" : config.get(CONFIG_KEY_JGSS_CONF)
+        // System.setProperty(
+        //     CONFIG_KEY_KERBEROS_CONF,
+        //     config.get(CONFIG_KEY_KERBEROS_CONF) == null ? "/etc/krb5.conf" : config.get(CONFIG_KEY_KERBEROS_CONF)
+        // );
+
+        // System.setProperty(
+        //     CONFIG_KEY_JGSS_CONF,
+        //     config.get(CONFIG_KEY_JGSS_CONF) == null ? "/etc/hive/conf.dist/jgss.conf" : config.get(CONFIG_KEY_JGSS_CONF)
+        // );
+
+        UserGroupInformation.setConfiguration(configuration);
+
+        try {
+            LOG.debug("Trying to login to Hadoop...");
+            UserGroupInformation.loginUserFromKeytab(
+                kerberosPrincipal,
+                kerberosKeytabFileName
             );
-            LOG.debug("Set " + CONFIG_KEY_JGSS_CONF + " to " + System.getProperty(CONFIG_KEY_JGSS_CONF));
+        }
+        catch (IOException e) {
+            throw new RuntimeException("Could not login to Hadoop", e);
+        }
+        LOG.debug("Hadoop login successful");
 
-            UserGroupInformation.setConfiguration(config);
-
-            Token<DelegationTokenIdentifier> token = getMetastoreToken(config, "hive/alex-hdp");
-            if (token != null) {
-                currentUser.addToken(token);
+        HiveMetaStoreClient hmsc = null;
+        try {
+            LOG.debug("Retrieving Hive metastore delegation token...");
+            hmsc = new HiveMetaStoreClient(configuration);
+            String delegationTokenString = hmsc.getDelegationToken(kerberosPrincipal);
+            Token<DelegationTokenIdentifier> delegationToken = new Token<>();
+            delegationToken.decodeFromUrlString(delegationTokenString);
+            delegationToken.setService(new Text(kerberosPrincipal));
+        }
+        catch (TException | IOException te) {
+            throw new RuntimeException("Could not retrieve metastore token", te);
+        }
+        finally {
+            if (hmsc != null) {
+                hmsc.close();
             }
         }
-        return config;
+        LOG.debug("Metastore token retrieval successful");
+
+        return configuration;
     }
 
     /**
