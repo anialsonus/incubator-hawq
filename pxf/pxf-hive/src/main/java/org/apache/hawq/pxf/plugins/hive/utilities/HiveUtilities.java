@@ -21,6 +21,7 @@ package org.apache.hawq.pxf.plugins.hive.utilities;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.security.PrivilegedExceptionAction;
 import java.util.Arrays;
 import java.util.List;
 import java.util.ArrayList;
@@ -209,14 +210,17 @@ public class HiveUtilities {
         HiveMetaStoreClient hmsc = null;
         try {
             LOG.debug("Retrieving Hive metastore delegation token...");
-            hmsc = new HiveMetaStoreClient(configuration);
+            hmsc = UserGroupInformation.getLoginUser().doAs(
+                (PrivilegedExceptionAction<HiveMetaStoreClient>) () ->
+                                new HiveMetaStoreClient(configuration)
+            );
             String delegationTokenString = hmsc.getDelegationToken(kerberosPrincipal);
             Token<DelegationTokenIdentifier> delegationToken = new Token<>();
             delegationToken.decodeFromUrlString(delegationTokenString);
             delegationToken.setService(new Text(kerberosPrincipal));
         }
-        catch (TException | IOException te) {
-            throw new RuntimeException("Could not retrieve metastore token", te);
+        catch (TException | IOException | InterruptedException e) {
+            throw new RuntimeException("Could not retrieve metastore token", e);
         }
         finally {
             if (hmsc != null) {
