@@ -8,9 +8,9 @@ package org.apache.hawq.pxf.plugins.hive;
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
@@ -95,7 +95,7 @@ public class HiveMetadataFetcherTest {
             fetcher.getMetadata(tableName);
             fail("Expected an IllegalArgumentException");
         } catch (IllegalArgumentException ex) {
-            assertEquals("\"t.r.o.u.b.l.e.m.a.k.e.r\" is not a valid Hive table name. Should be either <table_name> or <db_name.table_name>", ex.getMessage()); 
+            assertEquals("\"t.r.o.u.b.l.e.m.a.k.e.r\" is not a valid Hive table name. Should be either <table_name> or <db_name.table_name>", ex.getMessage());
         }
     }
 
@@ -269,7 +269,7 @@ public class HiveMetadataFetcherTest {
 
     private void prepareConstruction() throws Exception {
         hiveConfiguration = mock(HiveConf.class);
-        PowerMockito.whenNew(HiveConf.class).withNoArguments().thenReturn(hiveConfiguration);
+        PowerMockito.whenNew(HiveConf.class).withAnyArguments().thenReturn(hiveConfiguration);
 
         hiveClient = mock(HiveMetaStoreClient.class);
         PowerMockito.whenNew(HiveMetaStoreClient.class).withArguments(hiveConfiguration).thenReturn(hiveClient);

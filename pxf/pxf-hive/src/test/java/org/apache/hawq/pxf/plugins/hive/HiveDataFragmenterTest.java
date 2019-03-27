@@ -8,9 +8,9 @@ package org.apache.hawq.pxf.plugins.hive;
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
@@ -49,7 +49,7 @@ import java.util.*;
 
 @RunWith(PowerMockRunner.class)
 @PrepareForTest({HiveDataFragmenter.class}) // Enables mocking 'new' calls
-@SuppressStaticInitializationFor({"org.apache.hadoop.mapred.JobConf", 
+@SuppressStaticInitializationFor({"org.apache.hadoop.mapred.JobConf",
                                   "org.apache.hadoop.hive.metastore.api.MetaException",
                                   "org.apache.hawq.pxf.plugins.hive.utilities.HiveUtilities"}) // Prevents static inits
 public class HiveDataFragmenterTest {
@@ -64,7 +64,7 @@ public class HiveDataFragmenterTest {
     public void construction() throws Exception {
         prepareConstruction();
         fragmenter = new HiveDataFragmenter(inputData);
-        PowerMockito.verifyNew(JobConf.class).withArguments(hadoopConfiguration, HiveDataFragmenter.class);
+        PowerMockito.verifyNew(JobConf.class).withArguments(hiveConfiguration, HiveDataFragmenter.class);
         PowerMockito.verifyNew(HiveMetaStoreClient.class).withArguments(hiveConfiguration);
     }
 
@@ -313,12 +313,12 @@ public class HiveDataFragmenterTest {
         PowerMockito.whenNew(Configuration.class).withNoArguments().thenReturn(hadoopConfiguration);
 
         jobConf = mock(JobConf.class);
-        PowerMockito.whenNew(JobConf.class).withArguments(hadoopConfiguration, HiveDataFragmenter.class).thenReturn(jobConf);
+        PowerMockito.whenNew(JobConf.class).withAnyArguments().thenReturn(jobConf);
 
         hiveConfiguration = mock(HiveConf.class);
-        PowerMockito.whenNew(HiveConf.class).withNoArguments().thenReturn(hiveConfiguration);
+        PowerMockito.whenNew(HiveConf.class).withAnyArguments().thenReturn(hiveConfiguration);
 
         hiveClient = mock(HiveMetaStoreClient.class);
-        PowerMockito.whenNew(HiveMetaStoreClient.class).withArguments(hiveConfiguration).thenReturn(hiveClient);
+        PowerMockito.whenNew(HiveMetaStoreClient.class).withAnyArguments().thenReturn(hiveClient);
     }
 }
