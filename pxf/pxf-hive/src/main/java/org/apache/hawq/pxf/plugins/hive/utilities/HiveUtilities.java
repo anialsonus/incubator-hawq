@@ -8,9 +8,9 @@ package org.apache.hawq.pxf.plugins.hive.utilities;
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
@@ -19,8 +19,11 @@ package org.apache.hawq.pxf.plugins.hive.utilities;
  * under the License.
  */
 
-
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.security.PrivilegedExceptionAction;
 import java.util.Arrays;
 import java.util.List;
 import java.util.ArrayList;
@@ -41,6 +44,7 @@ import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.serde.serdeConstants;
 import org.apache.hadoop.hive.serde2.*;
+import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.hive.ql.io.orc.OrcFile;
 import org.apache.hadoop.hive.ql.io.orc.Reader;
 import org.apache.hawq.pxf.api.Metadata;
@@ -118,19 +122,50 @@ public class HiveUtilities {
     private static final int DEFAULT_DELIMITER_CODE = 44;
 
     /**
+     * Initializes HiveConf configuration object from request configuration. Since hive-site.xml
+     * is not available on classpath due to multi-server support, it is added explicitly based
+     * on location for a given PXF configuration server
+     * @param configuration request configuration
+     * @return instance of HiveConf object
+     */
+    public static HiveConf getHiveConf(Configuration configuration) {
+        // prepare hiveConf object and explicitly add this request's hive-site.xml file to it
+        HiveConf hiveConf = new HiveConf(configuration, HiveConf.class);
+
+        String hiveSiteUrl = configuration.get("pxf.config.resource.path.hive-site.xml");
+        if (hiveSiteUrl != null) {
+            try {
+                hiveConf.addResource(new URL(hiveSiteUrl));
+            } catch (MalformedURLException e) {
+                throw new RuntimeException(
+                        String.format("Failed to add %s to hive configuration", hiveSiteUrl), e);
+            }
+        }
+        return hiveConf;
+    }
+
+    /**
      * Initializes the HiveMetaStoreClient
      * Uses classpath configuration files to locate the MetaStore
      *
      * @return initialized client
      */
-    public static HiveMetaStoreClient initHiveClient() {
-        HiveMetaStoreClient client = null;
+    public static HiveMetaStoreClient initHiveClient(Configuration configuration) {
+        HiveConf hiveConf = HiveUtilities.getHiveConf(configuration);
         try {
-            client = new HiveMetaStoreClient(new HiveConf());
-        } catch (MetaException cause) {
+            if (UserGroupInformation.isSecurityEnabled()) {
+                LOG.debug("initialize HiveMetaStoreClient as login user '" + UserGroupInformation.getLoginUser().getUserName() + "'");
+                // wrap in doAs for Kerberos to propagate kerberos tokens from login Subject
+                return UserGroupInformation.getLoginUser().
+                        doAs((PrivilegedExceptionAction<HiveMetaStoreClient>) () ->
+                                new HiveMetaStoreClient(hiveConf));
+            }
+            else {
+                return new HiveMetaStoreClient(hiveConf);
+            }
+        } catch (MetaException | InterruptedException | IOException cause) {
             throw new RuntimeException("Failed connecting to Hive MetaStore service: " + cause.getMessage(), cause);
         }
-        return client;
     }
 
     public static Table getHiveTable(HiveMetaStoreClient client, Metadata.Item itemName)

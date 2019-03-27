@@ -19,9 +19,7 @@ package org.apache.hawq.pxf.plugins.hive;
  * under the License.
  */
 
-import java.io.ByteArrayOutputStream;
 import java.util.List;
-import java.util.ListIterator;
 import java.util.Properties;
 import java.util.Set;
 import java.util.TreeSet;
@@ -53,7 +51,6 @@ import org.apache.hawq.pxf.api.Fragmenter;
 import org.apache.hawq.pxf.api.FragmentsStats;
 import org.apache.hawq.pxf.api.LogicalFilter;
 import org.apache.hawq.pxf.api.Metadata;
-import org.apache.hawq.pxf.api.io.DataType;
 import org.apache.hawq.pxf.api.utilities.ColumnDescriptor;
 import org.apache.hawq.pxf.api.utilities.InputData;
 import org.apache.hawq.pxf.api.utilities.ProfilesConf;
@@ -120,11 +117,11 @@ public class HiveDataFragmenter extends Fragmenter {
      */
     public HiveDataFragmenter(InputData inputData, Class<?> clazz) {
         super(inputData);
-        jobConf = new JobConf(new Configuration(), clazz);
-        client = HiveUtilities.initHiveClient();
+        jobConf = new JobConf(HiveUtilities.getHiveConf(new Configuration()), clazz);
+        client = HiveUtilities.initHiveClient(jobConf);
         // canPushDownIntegral represents hive.metastore.integral.jdo.pushdown property in hive-site.xml
         canPushDownIntegral =
-                HiveConf.getBoolVar(new HiveConf(), HiveConf.ConfVars.METASTORE_INTEGER_JDO_PUSHDOWN);
+                HiveConf.getBoolVar(jobConf, HiveConf.ConfVars.METASTORE_INTEGER_JDO_PUSHDOWN);
     }
 
     @Override
@@ -427,9 +424,9 @@ public class HiveDataFragmenter extends Fragmenter {
             return false;
         }
 
-        /* 
-         * HAWQ-1527 - Filtering only supported for partition columns of type string or 
-         * intgeral datatype. Integral datatypes include - TINYINT, SMALLINT, INT, BIGINT. 
+        /*
+         * HAWQ-1527 - Filtering only supported for partition columns of type string or
+         * intgeral datatype. Integral datatypes include - TINYINT, SMALLINT, INT, BIGINT.
          * Note that with integral data types only equals("=") and not equals("!=") operators
          * are supported. There are no operator restrictions with String.
          */
